@@ -1,8 +1,8 @@
 // Транспорт: сокет, вход в сессию, проверка живости, переподключение.
 // О содержимом транзакций не знает — только доставляет кадры.
 
-import { DOC_USERS, WINDOW } from './store.js?v=9';
-import { T, txid } from './protocol.js?v=9';
+import { DOC_USERS, WINDOW } from './store.js?v=10';
+import { T, txid } from './protocol.js?v=10';
 
 const PING_INTERVAL = 30000;
 const BACKOFF_MIN = 500;

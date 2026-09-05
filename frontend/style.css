@@ -352,74 +352,31 @@ button.ghost:hover { color: var(--ink); }
 
 /* --- эмодзи ------------------------------------------------------------ */
 
-/* Палитра всплывает над кнопкой, не раздвигая разметку. */
+/* Палитра всплывает над кнопкой, не раздвигая разметку. Внутри —
+   emoji-picker-element, он рисует себя сам в Shadow DOM. */
 .emoji-pad {
   position: absolute;
   bottom: 52px;
   left: 12px;
   z-index: 30;
-  width: 520px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 8px;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  background: var(--panel);
   box-shadow: 0 6px 24px rgba(0, 0, 0, .45);
+  border-radius: 10px;
+  overflow: hidden;
 }
 
-.emoji-search {
-  padding: 6px 10px;
-  font-size: 13px;
-}
-
-.emoji-tabs {
-  display: flex;
-  gap: 2px;
-  border-bottom: 1px solid var(--line);
-  padding-bottom: 6px;
-}
-
-.emoji-tab {
-  flex: 1;
-  border: 0;
-  background: transparent;
-  font-size: 16px;
-  line-height: 1;
-  padding: 5px 0;
-  border-radius: 6px;
-  cursor: pointer;
-  opacity: .55;
-}
-.emoji-tab:hover { background: var(--sunken); opacity: .85; }
-.emoji-tab.active { background: var(--accent); opacity: 1; }
-
-/* Четырнадцать колонок: большинство категорий помещается целиком,
-   прокрутка остаётся только у самых больших. */
-.emoji-cells {
-  display: grid;
-  grid-template-columns: repeat(14, 1fr);
-  gap: 2px;
-  height: 380px;
-  overflow-y: auto;
-}
-
-.emoji-cell {
-  border: 0;
-  background: transparent;
-  font-size: 21px;
-  line-height: 1;
-  padding: 4px;
-  border-radius: 6px;
-  cursor: pointer;
-}
-.emoji-cell:hover { background: var(--sunken); }
-
-.emoji-empty {
-  grid-column: 1 / -1;
-  align-self: center;
-  text-align: center;
-  color: var(--ink-mute);
-  font-size: 12px;
+/* Переменные компонента подгоняются под тёмную тему приложения. */
+emoji-picker {
+  --background: var(--panel);
+  --border-color: var(--line);
+  --indicator-color: var(--accent-2);
+  --input-border-color: var(--line);
+  --input-background: var(--sunken);
+  --input-font-color: var(--ink);
+  --input-placeholder-color: var(--ink-mute);
+  --button-active-background: var(--accent);
+  --button-hover-background: var(--sunken);
+  --category-font-color: var(--ink-dim);
+  --num-columns: 9;
+  width: 352px;
+  height: 400px;
 }

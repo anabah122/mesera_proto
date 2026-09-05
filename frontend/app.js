@@ -1,13 +1,13 @@
 // Страница чата: локальное хранилище, соединение, отрисовка.
 // Авторизации здесь нет — без токена сразу уходим на страницу входа.
 
-import { Connection } from './connection.js?v=9';
-import { EmojiPad } from './emoji.js?v=9';
-import { prepare, upload } from './image.js?v=9';
-import { dialogId } from './protocol.js?v=9';
-import { Session } from './session.js?v=9';
-import { Storage } from './storage.js?v=9';
-import { DOC_USERS, Store, WINDOW } from './store.js?v=9';
+import { Connection } from './connection.js?v=10';
+import './vendor/picker.js?v=10';
+import { prepare, upload } from './image.js?v=10';
+import { dialogId } from './protocol.js?v=10';
+import { Session } from './session.js?v=10';
+import { Storage } from './storage.js?v=10';
+import { DOC_USERS, Store, WINDOW } from './store.js?v=10';
 
 const $ = (id) => document.getElementById(id);
 
@@ -193,23 +193,31 @@ viewer.onclick = closeViewer;
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
     if (!viewer.hidden) closeViewer();
-    else if (!pad.hidden) pad.close();
+    else if (!emojiPad.hidden) emojiPad.hidden = true;
     else if (replyTo) clearReply();
   }
 });
 
 // --- эмодзи ------------------------------------------------------------
 
-const pad = new EmojiPad(emojiPad, insert);
+// Готовый компонент emoji-picker-element: полный набор, поиск, тона кожи,
+// недавние. Лежит в vendor/ — в рантайме внешних загрузок нет.
+const picker = document.createElement('emoji-picker');
+picker.dataSource = '/vendor/emoji-data.json?v=10';
+picker.locale = 'ru';
+picker.addEventListener('emoji-click', (e) => insert(e.detail.unicode));
+emojiPad.append(picker);
 
 $('emoji').onclick = (e) => {
   e.stopPropagation();
-  pad.toggle();
+  emojiPad.hidden = !emojiPad.hidden;
 };
 
 // Клик мимо палитры закрывает её.
 document.addEventListener('click', (e) => {
-  if (!pad.hidden && !pad.contains(e.target) && e.target !== $('emoji')) pad.close();
+  if (!emojiPad.hidden && !emojiPad.contains(e.target) && e.target !== $('emoji')) {
+    emojiPad.hidden = true;
+  }
 });
 
 // Вставка идёт в позицию курсора, а не в конец строки.
@@ -219,6 +227,40 @@ function insert(ch) {
   input.value = input.value.slice(0, at) + ch + input.value.slice(to);
   input.focus();
   input.selectionStart = input.selectionEnd = at + ch.length;
+}
+
+// --- картинки ----------------------------------------------------------
+
+$('attach').onclick = () => $('file').click();
+
+$('file').onchange = (e) => {
+  const file = e.target.files[0];
+  if (file) sendImage(file);
+  // Сбрасываем, иначе повторный выбор того же файла не даст события.
+  e.target.value = '';
+};
+
+// Вставка из буфера: скриншот отправляется без сохранения на диск.
+input.onpaste = (e) => {
+  const item = [...e.clipboardData.items].find((i) => i.type.startsWith('image/'));
+  if (!item) return;
+  e.preventDefault();
+  sendImage(item.getAsFile());
+};
+
+async function sendImage(file) {
+  if (!peerId) return;
+  const doc = dialogId(me.id, peerId);
+  try {
+    // Сжатие и загрузка идут мимо сокета: в журнал попадёт только id.
+    const blob = await prepare(file);
+    const saved = await upload(blob, session.token);
+    conn.send(doc, 'msg.image', withReply({ file: saved.id, size: saved.size }));
+    clearReply();
+  } catch (err) {
+    statusEl.textContent = err.message;
+    statusEl.className = 'status failed';
+  }
 }
 
 // --- отрисовка ---------------------------------------------------------

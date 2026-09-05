@@ -5,7 +5,7 @@
 // правила CSS и работа палитры на подменённом localStorage.
 
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, statSync } from 'node:fs';
 
 const css = readFileSync(new URL('../frontend/style.css', import.meta.url), 'utf8');
 const html = readFileSync(new URL('../frontend/chat.html', import.meta.url), 'utf8');
@@ -38,31 +38,28 @@ const tests = {
 
   // --- палитра -------------------------------------------------------------
 
-  async 'палитра собрана из локальных данных, без загрузок в рантайме'() {
-    const src = readFileSync(new URL('../frontend/emoji.js', import.meta.url), 'utf8');
-    assert.doesNotMatch(src, /https?:\/\//, 'палитра не должна ходить в сеть');
-
-    const { GROUPS } = await import('../frontend/emoji-data.js');
-    const total = GROUPS.reduce((n, g) => n + g.e.length, 0);
-    assert.ok(total > 1000, `эмодзи слишком мало: ${total}`);
-    assert.ok(GROUPS.length >= 6, 'категорий слишком мало');
+  'палитра — готовый компонент, лежащий локально'() {
+    const src = readFileSync(new URL('../frontend/app.js', import.meta.url), 'utf8');
+    assert.match(src, /vendor\/picker\.js/, 'пикер не подключён из vendor');
+    assert.doesNotMatch(src, /https?:\/\//, 'в рантайме не должно быть внешних загрузок');
   },
 
-  async 'каждая запись — символ и название для поиска'() {
-    const { GROUPS } = await import('../frontend/emoji-data.js');
-    for (const g of GROUPS) {
-      assert.ok(g.t && g.i, 'у категории нет названия или значка');
-      for (const [ch, name] of g.e.slice(0, 5)) {
-        assert.ok(ch.length > 0 && typeof name === 'string');
-      }
+  'файлы пикера на месте'() {
+    for (const f of ['picker.js', 'database.js', 'emoji-data.json']) {
+      const size = statSync(new URL('../frontend/vendor/' + f, import.meta.url)).size;
+      assert.ok(size > 100, `${f} пустой или отсутствует`);
     }
   },
 
-  async 'поиск находит по названию'() {
-    const { GROUPS } = await import('../frontend/emoji-data.js');
-    const all = GROUPS.flatMap((g) => g.e);
-    const found = all.filter(([, name]) => name.toLowerCase().includes('cat'));
-    assert.ok(found.length > 0, 'поиск по названию ничего не дал');
+  // --- вложения ------------------------------------------------------------
+
+  'кнопка вложения и вставка из буфера подключены'() {
+    // Регрессия: обработчики пропали вместе с вырезанной палитрой.
+    const src = readFileSync(new URL('../frontend/app.js', import.meta.url), 'utf8');
+    assert.match(src, /\$\('attach'\)\.onclick/, 'кнопка вложения не подключена');
+    assert.match(src, /\$\('file'\)\.onchange/, 'выбор файла не обрабатывается');
+    assert.match(src, /input\.onpaste/, 'вставка из буфера не обрабатывается');
+    assert.match(src, /msg\.image/, 'картинка не отправляется в журнал');
   },
 };
 
