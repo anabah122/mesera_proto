@@ -2,7 +2,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>mesera</title>
-<link rel="stylesheet" href="style.css?v=7">
+<link rel="stylesheet" href="style.css?v=8">
 
 <div id="app" class="app">
   <aside class="sidebar">
@@ -19,13 +19,29 @@
   <main class="chat">
     <header id="chatHead" class="chat-head"><span class="muted">Выберите собеседника</span></header>
     <div id="log" class="log"></div>
+    <!-- На что отвечаем. Появляется над полем ввода. -->
+    <div id="replyBar" class="reply-bar" hidden>
+      <div class="reply-body">
+        <div class="reply-who"></div>
+        <div class="reply-text"></div>
+      </div>
+      <button id="replyCancel" class="icon" type="button" title="Отменить">&times;</button>
+    </div>
+
     <form id="composer" class="composer" hidden>
       <input id="file" type="file" accept="image/*" hidden>
       <button id="attach" class="icon" type="button" title="Картинка">&#128206;</button>
+      <button id="emoji" class="icon" type="button" title="Эмодзи">&#128512;</button>
+      <div id="emojiPad" class="emoji-pad" hidden></div>
       <input id="input" placeholder="Сообщение" autocomplete="off">
       <button class="primary" type="submit">Отправить</button>
     </form>
   </main>
 </div>
 
-<script type="module" src="app.js?v=7"></script>
+<!-- Просмотр картинки поверх всего. Закрывается кликом по фону. -->
+<div id="viewer" class="viewer" hidden>
+  <img id="viewerImg" alt="">
+</div>
+
+<script type="module" src="app.js?v=8"></script>

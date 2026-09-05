@@ -1,18 +1,23 @@
 // Страница чата: локальное хранилище, соединение, отрисовка.
 // Авторизации здесь нет — без токена сразу уходим на страницу входа.
 
-import { Connection } from './connection.js?v=7';
-import { prepare, upload } from './image.js?v=7';
-import { dialogId } from './protocol.js?v=7';
-import { Session } from './session.js?v=7';
-import { Storage } from './storage.js?v=7';
-import { DOC_USERS, Store, WINDOW } from './store.js?v=7';
+import { Connection } from './connection.js?v=8';
+import { prepare, upload } from './image.js?v=8';
+import { dialogId } from './protocol.js?v=8';
+import { Session } from './session.js?v=8';
+import { Storage } from './storage.js?v=8';
+import { DOC_USERS, Store, WINDOW } from './store.js?v=8';
 
 const $ = (id) => document.getElementById(id);
 
 const app = $('app');
 const logEl = $('log'), peopleEl = $('people'), chatHead = $('chatHead');
 const composer = $('composer'), input = $('input'), statusEl = $('status');
+const viewer = $('viewer'), viewerImg = $('viewerImg');
+const replyBar = $('replyBar'), emojiPad = $('emojiPad');
+
+// На какое сообщение отвечаем. Сбрасывается после отправки и при смене диалога.
+let replyTo = null;
 
 let storage, store, conn;
 let me = null;
@@ -94,6 +99,7 @@ function refreshPeople() {
 
 async function openDialog(id) {
   peerId = id;
+  clearReply();
   const doc = dialogId(me.id, peerId);
   chatHead.textContent = people.find((u) => u.id === peerId)?.name || peerId;
   composer.hidden = false;
@@ -121,9 +127,115 @@ composer.onsubmit = (e) => {
   e.preventDefault();
   const text = input.value.trim();
   if (!text || !peerId) return;
-  conn.send(dialogId(me.id, peerId), 'msg.send', { text });
+  conn.send(dialogId(me.id, peerId), 'msg.send', withReply({ text }));
   input.value = '';
+  clearReply();
 };
+
+// --- ответы ------------------------------------------------------------
+
+// Ответ несёт номер оригинала и его отрывок: показать цитату можно сразу,
+// не догружая старое сообщение из глубины журнала.
+function withReply(payload) {
+  if (!replyTo) return payload;
+  return {
+    ...payload,
+    reply: {
+      idx: replyTo.idx,
+      author: replyTo.author,
+      text: quote(replyTo),
+    },
+  };
+}
+
+function quote(entry) {
+  if (entry.op === 'msg.image') return 'Картинка';
+  return (entry.payload.text || '').slice(0, 120);
+}
+
+function startReply(entry) {
+  replyTo = entry;
+  replyBar.querySelector('.reply-who').textContent = nameOf(entry.author);
+  replyBar.querySelector('.reply-text').textContent = quote(entry);
+  replyBar.hidden = false;
+  input.focus();
+}
+
+function clearReply() {
+  replyTo = null;
+  replyBar.hidden = true;
+}
+
+$('replyCancel').onclick = clearReply;
+
+function nameOf(id) {
+  if (id === me?.id) return 'Вы';
+  return store.users.get(id)?.name || id;
+}
+
+// --- просмотр картинки -------------------------------------------------
+
+function openViewer(src) {
+  viewerImg.src = src;
+  viewer.hidden = false;
+}
+
+function closeViewer() {
+  viewer.hidden = true;
+  // Освобождаем картинку: незачем держать её в памяти закрытой.
+  viewerImg.removeAttribute('src');
+}
+
+// Клик в любом месте закрывает — как по фону, так и по самой картинке.
+viewer.onclick = closeViewer;
+
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') {
+    if (!viewer.hidden) closeViewer();
+    else if (!emojiPad.hidden) emojiPad.hidden = true;
+    else if (replyTo) clearReply();
+  }
+});
+
+// --- эмодзи ------------------------------------------------------------
+
+// Свой короткий набор вместо библиотеки: на фронтенде нет ни сборки,
+// ни зависимостей, и ради палитры заводить их незачем.
+const EMOJI = [
+  '😀', '😂', '🙂', '😉', '😍', '😘', '😎', '🤔',
+  '😐', '🙄', '😴', '😢', '😭', '😡', '🥳', '🤯',
+  '👍', '👎', '👌', '🙏', '👏', '💪', '🤝', '✌️',
+  '❤️', '🔥', '⭐', '✅', '❌', '❗', '❓', '💯',
+  '🎉', '🎁', '☕', '🍕', '🚀', '💻', '📌', '👀',
+];
+
+emojiPad.replaceChildren(...EMOJI.map((ch) => {
+  const el = document.createElement('button');
+  el.type = 'button';
+  el.className = 'emoji-cell';
+  el.textContent = ch;
+  el.onclick = () => insert(ch);
+  return el;
+}));
+
+$('emoji').onclick = (e) => {
+  e.stopPropagation();
+  emojiPad.hidden = !emojiPad.hidden;
+};
+
+// Клик мимо палитры закрывает её.
+document.addEventListener('click', (e) => {
+  if (!emojiPad.hidden && !emojiPad.contains(e.target)) emojiPad.hidden = true;
+});
+
+// Вставка идёт в позицию курсора, а не в конец строки.
+function insert(ch) {
+  const at = input.selectionStart ?? input.value.length;
+  const to = input.selectionEnd ?? at;
+  input.value = input.value.slice(0, at) + ch + input.value.slice(to);
+  input.focus();
+  input.selectionStart = input.selectionEnd = at + ch.length;
+}
 
 // --- картинки ----------------------------------------------------------
 
@@ -151,7 +263,8 @@ async function sendImage(file) {
     // Сжатие и загрузка идут мимо сокета: в журнал попадёт только id.
     const blob = await prepare(file);
     const saved = await upload(blob, session.token);
-    conn.send(doc, 'msg.image', { file: saved.id, size: saved.size });
+    conn.send(doc, 'msg.image', withReply({ file: saved.id, size: saved.size }));
+    clearReply();
   } catch (err) {
     // Загрузка не дошла до журнала, поэтому показать нечего кроме сообщения.
     statusEl.textContent = err.message;
@@ -187,13 +300,25 @@ function bubble(entry, meta, cls) {
   const el = document.createElement('div');
   el.className = 'msg ' + cls;
 
+  // Цитата над телом: отрывок пришёл вместе с ответом, догружать нечего.
+  const reply = entry.payload.reply;
+  if (reply) {
+    const q = document.createElement('div');
+    q.className = 'quote';
+    q.innerHTML = '<div class="quote-who"></div><div class="quote-text"></div>';
+    q.children[0].textContent = nameOf(reply.author);
+    q.children[1].textContent = reply.text;
+    // Клик по цитате прокручивает к оригиналу, если он в окне.
+    q.onclick = () => scrollTo(reply.idx);
+    el.append(q);
+  }
+
   if (entry.op === 'msg.image') {
     const img = document.createElement('img');
     img.className = 'shot';
     img.loading = 'lazy';
     img.src = '/api/file/' + entry.payload.file;
-    // Полный размер — тем же файлом, отдельной копии нет.
-    img.onclick = () => window.open(img.src, '_blank');
+    img.onclick = () => openViewer(img.src);
     el.append(img);
   } else {
     el.append(document.createTextNode(entry.payload.text ?? ''));
@@ -204,7 +329,28 @@ function bubble(entry, meta, cls) {
   foot.className = 'meta';
   foot.textContent = meta;
   el.append(foot);
+
+  // Ответить можно только на записанное: у неподтверждённого нет номера.
+  if (entry.idx) {
+    el.dataset.idx = entry.idx;
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'reply-btn';
+    btn.title = 'Ответить';
+    btn.textContent = '↩';
+    btn.onclick = () => startReply(entry);
+    el.append(btn);
+  }
   return el;
+}
+
+// Прокрутка к оригиналу с короткой подсветкой.
+function scrollTo(idx) {
+  const target = logEl.querySelector(`[data-idx="${idx}"]`);
+  if (!target) return;
+  target.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  target.classList.add('flash');
+  setTimeout(() => target.classList.remove('flash'), 900);
 }
 
 // Изменение store перерисовывает и список людей, и ленту: новый участник

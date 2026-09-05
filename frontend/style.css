@@ -229,6 +229,8 @@ button.ghost:hover { color: var(--ink); }
   gap: 8px;
   padding: 12px 16px;
   align-items: center;
+  /* Опора для палитры эмодзи: она всплывает над кнопкой. */
+  position: relative;
 }
 
 /* Кнопка вложения: только значок, без рамки. */
@@ -245,3 +247,129 @@ button.ghost:hover { color: var(--ink); }
 .icon:hover { background: var(--sunken); color: var(--ink); }
 .composer input { flex: 1; border-radius: 18px; }
 .composer button { border-radius: 18px; }
+
+
+/* --- просмотр картинки ------------------------------------------------- */
+
+/* Затемнение поверх всего. Клик в любом месте закрывает. */
+.viewer {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32px;
+  background: rgba(0, 0, 0, .82);
+  cursor: zoom-out;
+  animation: fade .12s ease-out;
+}
+
+.viewer img {
+  max-width: 100%;
+  max-height: 100%;
+  border-radius: 8px;
+  box-shadow: 0 8px 40px rgba(0, 0, 0, .5);
+}
+
+@keyframes fade { from { opacity: 0 } to { opacity: 1 } }
+
+/* --- ответы ------------------------------------------------------------ */
+
+/* Цитата внутри пузыря: полоса слева, как в привычных мессенджерах. */
+.quote {
+  border-left: 3px solid var(--accent-2);
+  padding: 2px 8px;
+  margin-bottom: 4px;
+  border-radius: 3px;
+  background: rgba(0, 0, 0, .18);
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.quote-who { color: var(--accent-2); font-weight: 600; }
+.msg.own .quote-who { color: #cfe3f5; }
+
+.quote-text {
+  color: var(--ink-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.msg.own .quote-text { color: #d5e4f2; }
+
+/* Подсветка оригинала после перехода по цитате. */
+.msg.flash { animation: flash .9s ease-out; }
+@keyframes flash {
+  from { background: var(--accent-2) }
+}
+
+/* Кнопка ответа: проявляется при наведении на сообщение. */
+.msg { position: relative; }
+
+.reply-btn {
+  position: absolute;
+  top: 2px;
+  right: -26px;
+  border: 0;
+  background: transparent;
+  color: var(--ink-mute);
+  font-size: 14px;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity .1s;
+}
+.msg.own .reply-btn { right: auto; left: -26px; }
+.msg:hover .reply-btn { opacity: 1; }
+.reply-btn:hover { color: var(--ink); }
+
+/* Панель над полем ввода: на что отвечаем. */
+.reply-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 16px;
+  padding: 6px 10px;
+  border-left: 3px solid var(--accent-2);
+  border-radius: 4px;
+  background: var(--sunken);
+  font-size: 12px;
+}
+
+.reply-body { flex: 1; min-width: 0; }
+.reply-who { color: var(--accent-2); font-weight: 600; }
+.reply-text {
+  color: var(--ink-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* --- эмодзи ------------------------------------------------------------ */
+
+/* Палитра всплывает над кнопкой, не раздвигая разметку. */
+.emoji-pad {
+  position: absolute;
+  bottom: 52px;
+  left: 12px;
+  z-index: 20;
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 2px;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel);
+  box-shadow: 0 6px 24px rgba(0, 0, 0, .4);
+}
+
+.emoji-cell {
+  border: 0;
+  background: transparent;
+  font-size: 20px;
+  line-height: 1;
+  padding: 4px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.emoji-cell:hover { background: var(--sunken); }
