@@ -51,6 +51,31 @@ const tests = {
     }
   },
 
+  // --- шрифт эмодзи --------------------------------------------------------
+
+  'цветные эмодзи подключены своим шрифтом'() {
+    // Системные эмодзи на Windows плоские; Noto выглядит одинаково везде.
+    assert.match(css, /@font-face[\s\S]*?Noto Color Emoji/, 'шрифт не объявлен');
+    assert.match(css, /url\('vendor\/font\/noto-color-emoji\.woff2'\)/,
+      'шрифт должен лежать локально');
+    assert.match(css, /font:[^;]*'Noto Color Emoji'/, 'шрифт не в стеке body');
+    assert.match(css, /--emoji-font-family:\s*'Noto Color Emoji'/,
+      'в Shadow DOM палитры шрифт не попадёт без этой переменной');
+  },
+
+  'файл шрифта на месте и это woff2'() {
+    const url = new URL('../frontend/vendor/font/noto-color-emoji.woff2', import.meta.url);
+    assert.ok(statSync(url).size > 1_000_000, 'шрифт подозрительно мал');
+    assert.equal(readFileSync(url).subarray(0, 4).toString('latin1'), 'wOF2',
+      'файл не является woff2');
+  },
+
+  'сервер отдаёт woff2 правильным типом'() {
+    // Со сторонним типом браузер шрифт отвергает.
+    const main = readFileSync(new URL('../backend/main.py', import.meta.url), 'utf8');
+    assert.match(main, /add_type\("font\/woff2", "\.woff2"\)/);
+  },
+
   // --- вложения ------------------------------------------------------------
 
   'кнопка вложения и вставка из буфера подключены'() {

@@ -1,6 +1,7 @@
 """Точка входа: HTTP для входа в систему, WebSocket для всего остального."""
 
 import json
+import mimetypes
 import os
 from pathlib import Path
 
@@ -23,6 +24,10 @@ FRONTEND = ROOT.parent / "frontend"
 DB_PATH = Path(os.environ.get("MESERA_DB") or ROOT / "mesera.db")
 # Вложения лежат рядом с базой: тот же том переживает пересборку образа.
 FILES_PATH = Path(os.environ.get("MESERA_FILES") or DB_PATH.parent / "files")
+
+# StaticFiles определяет тип по расширению через mimetypes, а woff2 там
+# известен не во всех системах — браузер отвергает шрифт с чужим типом.
+mimetypes.add_type("font/woff2", ".woff2")
 
 app = FastAPI()
 DB_PATH.parent.mkdir(parents=True, exist_ok=True)

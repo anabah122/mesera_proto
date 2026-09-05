@@ -1,3 +1,16 @@
+/* Цветные эмодзи одним шрифтом. Системные на Windows плоские и блёклые;
+   Noto выглядит одинаково во всех браузерах — и в ленте, и в палитре,
+   и при вводе с клавиатуры. Грузится один раз, дальше из кеша. */
+@font-face {
+  font-family: 'Noto Color Emoji';
+  src: url('vendor/font/noto-color-emoji.woff2') format('woff2');
+  font-display: swap;
+  /* unicode-range ограничивает загрузку: обычный текст шрифт не трогает,
+     и без эмодзи на странице файл не скачивается вовсе. */
+  unicode-range: U+1F000-1FAFF, U+2190-21FF, U+2300-23FF, U+2460-24FF,
+                 U+25A0-27BF, U+2B00-2BFF, U+FE0F, U+1F1E6-1F1FF, U+200D;
+}
+
 :root {
   --bg:       #17212b;
   --panel:    #1f2c3a;
@@ -56,7 +69,7 @@ body {
   overflow: hidden;
   background: var(--bg);
   color: var(--ink);
-  font: 14px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+  font: 14px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif, 'Noto Color Emoji';
 }
 
 input {
@@ -377,6 +390,9 @@ emoji-picker {
   --button-hover-background: var(--sunken);
   --category-font-color: var(--ink-dim);
   --num-columns: 9;
+  /* Компонент рисует себя в Shadow DOM: шрифт из body туда не попадает,
+     поэтому задаём его явно, иначе в палитре останутся системные. */
+  --emoji-font-family: 'Noto Color Emoji';
   width: 352px;
   height: 400px;
 }

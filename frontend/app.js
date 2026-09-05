@@ -1,13 +1,13 @@
 // Страница чата: локальное хранилище, соединение, отрисовка.
 // Авторизации здесь нет — без токена сразу уходим на страницу входа.
 
-import { Connection } from './connection.js?v=10';
-import './vendor/picker.js?v=10';
-import { prepare, upload } from './image.js?v=10';
-import { dialogId } from './protocol.js?v=10';
-import { Session } from './session.js?v=10';
-import { Storage } from './storage.js?v=10';
-import { DOC_USERS, Store, WINDOW } from './store.js?v=10';
+import { Connection } from './connection.js?v=11';
+import './vendor/picker.js?v=11';
+import { prepare, upload } from './image.js?v=11';
+import { dialogId } from './protocol.js?v=11';
+import { Session } from './session.js?v=11';
+import { Storage } from './storage.js?v=11';
+import { DOC_USERS, Store, WINDOW } from './store.js?v=11';
 
 const $ = (id) => document.getElementById(id);
 
@@ -203,7 +203,7 @@ document.addEventListener('keydown', (e) => {
 // Готовый компонент emoji-picker-element: полный набор, поиск, тона кожи,
 // недавние. Лежит в vendor/ — в рантайме внешних загрузок нет.
 const picker = document.createElement('emoji-picker');
-picker.dataSource = '/vendor/emoji-data.json?v=10';
+picker.dataSource = '/vendor/emoji-data.json?v=11';
 picker.locale = 'ru';
 picker.addEventListener('emoji-click', (e) => insert(e.detail.unicode));
 emojiPad.append(picker);
