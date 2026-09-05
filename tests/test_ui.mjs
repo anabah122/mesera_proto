@@ -63,11 +63,25 @@ const tests = {
       'в Shadow DOM палитры шрифт не попадёт без этой переменной');
   },
 
-  'файл шрифта на месте и это woff2'() {
-    const url = new URL('../frontend/vendor/font/noto-color-emoji.woff2', import.meta.url);
-    assert.ok(statSync(url).size > 1_000_000, 'шрифт подозрительно мал');
-    assert.equal(readFileSync(url).subarray(0, 4).toString('latin1'), 'wOF2',
-      'файл не является woff2');
+  'файлы шрифтов на месте и это woff2'() {
+    const names = [
+      'noto-color-emoji',
+      'noto-sans-latin-400', 'noto-sans-latin-500', 'noto-sans-latin-600',
+      'noto-sans-cyrillic-400', 'noto-sans-cyrillic-500', 'noto-sans-cyrillic-600',
+    ];
+    for (const n of names) {
+      const url = new URL(`../frontend/vendor/font/${n}.woff2`, import.meta.url);
+      assert.ok(statSync(url).size > 1000, `${n} подозрительно мал`);
+      assert.equal(readFileSync(url).subarray(0, 4).toString('latin1'), 'wOF2',
+        `${n} не является woff2`);
+    }
+  },
+
+  'кириллица подключена отдельным начертанием'() {
+    // Без своего файла русский текст свалился бы на системный шрифт.
+    assert.match(css, /noto-sans-cyrillic-400\.woff2/, 'кириллица не подключена');
+    assert.match(css, /unicode-range:[^;]*U\+0400-045F/, 'нет диапазона кириллицы');
+    assert.match(css, /font:[^;]*'Noto Sans'/, 'Noto Sans не первый в стеке');
   },
 
   'сервер отдаёт woff2 правильным типом'() {
