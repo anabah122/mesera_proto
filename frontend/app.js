@@ -43,7 +43,11 @@ async function start(session) {
   // работать другой человек, его база отдельная.
   storage = await Storage.open(session.me.id);
 
-  store = new Store(storage, render);
+  // Перерисовка идёт через onStoreChange: он обновляет и список людей,
+  // и ленту — одного render мало, сайдбар остался бы прежним.
+  store = new Store(storage, onStoreChange);
+  // Состав, известный с прошлого сеанса: список людей есть до соединения.
+  await store.loadUsers();
 
   conn = new Connection({
     token: session.token,
