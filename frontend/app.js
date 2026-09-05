@@ -1,13 +1,13 @@
 // Страница чата: локальное хранилище, соединение, отрисовка.
 // Авторизации здесь нет — без токена сразу уходим на страницу входа.
 
-import { Connection } from './connection.js?v=12';
-import './vendor/picker.js?v=12';
-import { prepare, upload } from './image.js?v=12';
-import { dialogId } from './protocol.js?v=12';
-import { Session } from './session.js?v=12';
-import { Storage } from './storage.js?v=12';
-import { DOC_USERS, Store, WINDOW } from './store.js?v=12';
+import { Connection } from './connection.js?v=13';
+import './vendor/picker.js?v=13';
+import { prepare, upload } from './image.js?v=13';
+import { dialogId } from './protocol.js?v=13';
+import { Session } from './session.js?v=13';
+import { Storage } from './storage.js?v=13';
+import { DOC_USERS, Store, WINDOW } from './store.js?v=13';
 
 const $ = (id) => document.getElementById(id);
 
@@ -203,10 +203,20 @@ document.addEventListener('keydown', (e) => {
 // Готовый компонент emoji-picker-element: полный набор, поиск, тона кожи,
 // недавние. Лежит в vendor/ — в рантайме внешних загрузок нет.
 const picker = document.createElement('emoji-picker');
-picker.dataSource = '/vendor/emoji-data.json?v=12';
+picker.dataSource = '/vendor/emoji-data.json?v=13';
 picker.locale = 'ru';
 picker.addEventListener('emoji-click', (e) => insert(e.detail.unicode));
 emojiPad.append(picker);
+
+// Полосу прокрутки внутри палитры прячем: колесом листается по-прежнему,
+// а сама полоса отъедает колонку. Компонент не отдаёт эту часть наружу
+// через ::part, поэтому стиль кладём прямо в его теневое дерево.
+const padStyle = document.createElement('style');
+padStyle.textContent = `
+  .tabpanel { scrollbar-width: none; scrollbar-gutter: auto; }
+  .tabpanel::-webkit-scrollbar { width: 0; }
+`;
+picker.shadowRoot.append(padStyle);
 
 $('emoji').onclick = (e) => {
   e.stopPropagation();
@@ -328,7 +338,7 @@ function bubble(entry, meta, cls) {
     btn.type = 'button';
     btn.className = 'reply-btn';
     btn.title = 'Ответить';
-    btn.textContent = '↩';
+    btn.textContent = '💬';
     btn.onclick = () => startReply(entry);
     el.append(btn);
   }

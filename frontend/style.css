@@ -392,18 +392,20 @@ button.ghost:hover { color: var(--ink); }
 .reply-btn {
   position: absolute;
   top: 2px;
-  right: -26px;
+  right: -30px;
   border: 0;
   background: transparent;
+  padding: 0;
   color: var(--ink-mute);
-  font-size: 14px;
+  font-size: 13px;
+  filter: grayscale(1);
   cursor: pointer;
   opacity: 0;
   transition: opacity .1s;
 }
-.msg.own .reply-btn { right: auto; left: -26px; }
+.msg.own .reply-btn { right: auto; left: -30px; }
 .msg:hover .reply-btn { opacity: 1; }
-.reply-btn:hover { color: var(--ink); }
+.reply-btn:hover { filter: none; }
 
 /* Панель над полем ввода: на что отвечаем. */
 .reply-bar {
@@ -453,10 +455,11 @@ emoji-picker {
   --button-active-background: var(--accent);
   --button-hover-background: var(--sunken);
   --category-font-color: var(--ink-dim);
-  --num-columns: 9;
+  --num-columns: 10;
   /* Компонент рисует себя в Shadow DOM: шрифт из body туда не попадает,
      поэтому задаём его явно, иначе в палитре останутся системные. */
   --emoji-font-family: 'Noto Color Emoji';
-  width: 352px;
-  height: 400px;
+  width: 392px;
+  height: 420px;
 }
+
