@@ -1,0 +1,604 @@
+<title>Протокол chat.v1</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+
+<style>
+  :root {
+    --bg:        #f3f6f9;
+    --surface:   #ffffff;
+    --sunken:    #e8eef4;
+    --line:      #cfdae4;
+    --line-soft: #e2eaf1;
+    --ink:       #172533;
+    --ink-dim:   #5b7085;
+    --ink-faint: #8298ab;
+    --server:    #1f6fb2;
+    --client:    #a4661f;
+    --alarm:     #b3403c;
+    --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+    --sans: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg:        #0e1621;
+      --surface:   #16212e;
+      --sunken:    #111b26;
+      --line:      #2a3a4b;
+      --line-soft: #1e2b39;
+      --ink:       #dde6ee;
+      --ink-dim:   #91a6ba;
+      --ink-faint: #6a8096;
+      --server:    #56a7e0;
+      --client:    #d2a06a;
+      --alarm:     #e0716c;
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --bg:        #0e1621;
+    --surface:   #16212e;
+    --sunken:    #111b26;
+    --line:      #2a3a4b;
+    --line-soft: #1e2b39;
+    --ink:       #dde6ee;
+    --ink-dim:   #91a6ba;
+    --ink-faint: #6a8096;
+    --server:    #56a7e0;
+    --client:    #d2a06a;
+    --alarm:     #e0716c;
+  }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font: 400 16px/1.65 var(--sans);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .page {
+    max-width: 76ch;
+    margin: 0 auto;
+    padding: 56px 24px 96px;
+    display: flex;
+    flex-direction: column;
+    gap: 44px;
+  }
+
+  .masthead { display: flex; flex-direction: column; gap: 14px; }
+
+  .eyebrow {
+    font: 500 11px/1 var(--mono);
+    letter-spacing: .16em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+  }
+
+  h1 {
+    margin: 0;
+    font: 700 34px/1.15 var(--sans);
+    letter-spacing: -.02em;
+    text-wrap: balance;
+  }
+
+  .lede { margin: 0; color: var(--ink-dim); max-width: 62ch; }
+
+  .facts {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(155px, 1fr));
+    gap: 1px;
+    background: var(--line-soft);
+    border: 1px solid var(--line-soft);
+    margin: 6px 0 0;
+  }
+  .facts > div { background: var(--bg); padding: 12px 14px; }
+  .facts dt {
+    font: 500 10px/1 var(--mono);
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+  }
+  .facts dd {
+    margin: 6px 0 0;
+    font: 500 14px/1.3 var(--mono);
+  }
+
+  section { display: flex; flex-direction: column; gap: 18px; }
+
+  h2 {
+    margin: 0;
+    padding-top: 22px;
+    border-top: 1px solid var(--line);
+    font: 600 21px/1.3 var(--sans);
+    letter-spacing: -.01em;
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+  }
+  h2::before {
+    content: attr(data-n);
+    font: 500 12px/1 var(--mono);
+    color: var(--ink-faint);
+  }
+
+  h3 { margin: 0; font: 600 15px/1.4 var(--sans); }
+
+  p { margin: 0; max-width: 66ch; }
+
+  code {
+    font: 500 .89em/1 var(--mono);
+    background: var(--sunken);
+    border: 1px solid var(--line-soft);
+    border-radius: 3px;
+    padding: 1px 5px;
+  }
+
+  em { font-style: normal; color: var(--ink); font-weight: 600; }
+
+  figure { margin: 0; display: flex; flex-direction: column; gap: 10px; }
+
+  figure svg {
+    width: 100%;
+    min-width: 520px;
+    height: auto;
+    display: block;
+    color: var(--ink-dim);
+    background: var(--surface);
+    border: 1px solid var(--line-soft);
+  }
+
+  figcaption {
+    font-size: 13.5px;
+    line-height: 1.55;
+    color: var(--ink-dim);
+    max-width: 64ch;
+  }
+
+  .scroller { overflow-x: auto; }
+
+  .note {
+    background: var(--surface);
+    border-left: 2px solid var(--client);
+    padding: 14px 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+  }
+  .note h3 { font-size: 14px; }
+  .note p { font-size: 14.5px; color: var(--ink-dim); }
+
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th, td {
+    text-align: left;
+    padding: 9px 12px 9px 0;
+    border-bottom: 1px solid var(--line-soft);
+    vertical-align: top;
+  }
+  th {
+    font: 500 10px/1 var(--mono);
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    border-bottom-color: var(--line);
+    white-space: nowrap;
+  }
+  td:first-child { font: 500 13.5px/1.5 var(--mono); white-space: nowrap; }
+  td:nth-child(2) {
+    font: 400 12px/1.5 var(--mono);
+    white-space: nowrap;
+    padding-right: 18px;
+  }
+  tbody tr:last-child td { border-bottom: 0; }
+
+  .dir-c { color: var(--client); }
+  .dir-s { color: var(--server); }
+  .dir-b { color: var(--ink-faint); }
+
+  .open {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    background: var(--line-soft);
+    border: 1px solid var(--line-soft);
+  }
+  .open > div {
+    background: var(--bg);
+    padding: 14px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+  }
+  .open h3 { font-size: 14.5px; }
+  .open p { font-size: 14px; color: var(--ink-dim); }
+
+  footer {
+    border-top: 1px solid var(--line);
+    padding-top: 18px;
+    font: 400 13px/1.6 var(--mono);
+    color: var(--ink-faint);
+  }
+
+  @media (max-width: 560px) {
+    h1 { font-size: 27px; }
+    .page { padding: 40px 18px 72px; gap: 36px; }
+  }
+</style>
+
+<div class="page">
+
+  <header class="masthead">
+    <div class="eyebrow">mesera · спецификация транспорта</div>
+    <h1>Протокол chat.v1</h1>
+    <p class="lede">
+      Дуплексный WebSocket. Клиент не пишет в свой журнал: сообщение становится
+      актуальным только когда возвращается с сервера с присвоенным номером.
+    </p>
+    <dl class="facts">
+      <div><dt>Транспорт</dt><dd>wss · chat.v1</dd></div>
+      <div><dt>Кадры</dt><dd>JSON → MessagePack</dd></div>
+      <div><dt>Порядок</dt><dd>idx, счётчик</dd></div>
+      <div><dt>Дедупликация</dt><dd>txid, окно 24ч</dd></div>
+    </dl>
+  </header>
+
+  <section>
+    <h2 data-n="01">Топология</h2>
+    <p>
+      Одно соединение на клиента. Обе стороны отправляют кадры без запроса — сервер
+      не ждёт, пока его спросят. Объёмное (история, файлы) идёт мимо сокета по HTTP:
+      у WebSocket нет обратного давления на крупные ответы, и одна страница пагинации
+      забьёт канал, за которым стоят живые сообщения.
+    </p>
+
+    <figure>
+      <div class="scroller">
+      <svg viewBox="0 0 720 236" role="img" aria-label="Клиент и сервер соединены дуплексным WebSocket для живого потока и отдельным HTTP-каналом для истории и файлов">
+        <defs>
+          <marker id="a-fg" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <polygon points="0,1 9,5 0,9" fill="currentColor"/>
+          </marker>
+          <marker id="a-srv" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <polygon points="0,1 9,5 0,9" fill="#3f8fc8"/>
+          </marker>
+          <marker id="a-cli" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <polygon points="0,1 9,5 0,9" fill="#bb8340"/>
+          </marker>
+          <marker id="a-alm" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <polygon points="0,1 9,5 0,9" fill="#c65753"/>
+          </marker>
+        </defs>
+
+        <rect x="26" y="34" width="204" height="168" fill="none" stroke="currentColor" stroke-width="1.1"/>
+        <text x="42" y="58" font-family="IBM Plex Mono, monospace" font-size="12" font-weight="600" fill="currentColor">FRONTEND</text>
+
+        <rect x="42" y="74" width="172" height="48" fill="none" stroke="var(--server)" stroke-width="1.2"/>
+        <text x="54" y="93" font-family="IBM Plex Mono, monospace" font-size="11.5" fill="var(--server)">CommittedLog</text>
+        <text x="54" y="110" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="currentColor">ключ idx · только с сервера</text>
+
+        <rect x="42" y="134" width="172" height="48" fill="none" stroke="var(--client)" stroke-width="1.2" stroke-dasharray="4 3"/>
+        <text x="54" y="153" font-family="IBM Plex Mono, monospace" font-size="11.5" fill="var(--client)">PendingQueue</text>
+        <text x="54" y="170" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="currentColor">ключ txid · номера нет</text>
+
+        <rect x="490" y="34" width="204" height="168" fill="none" stroke="currentColor" stroke-width="1.1"/>
+        <text x="506" y="58" font-family="IBM Plex Mono, monospace" font-size="12" font-weight="600" fill="currentColor">BACKEND</text>
+
+        <rect x="506" y="74" width="172" height="48" fill="none" stroke="var(--server)" stroke-width="1.2"/>
+        <text x="518" y="93" font-family="IBM Plex Mono, monospace" font-size="11.5" fill="var(--server)">actions db</text>
+        <text x="518" y="110" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="currentColor">правда · выдаёт idx</text>
+
+        <rect x="506" y="134" width="172" height="48" fill="none" stroke="currentColor" stroke-width="1.2"/>
+        <text x="518" y="153" font-family="IBM Plex Mono, monospace" font-size="11.5" fill="currentColor">hot cache</text>
+        <text x="518" y="170" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="currentColor">производная от бд</text>
+
+        <line x1="592" y1="122" x2="592" y2="132" stroke="currentColor" stroke-width="1.1" marker-end="url(#a-fg)" opacity=".55"/>
+
+        <line x1="234" y1="94" x2="484" y2="94" stroke="var(--server)" stroke-width="1.4" marker-start="url(#a-srv)" marker-end="url(#a-srv)"/>
+        <text x="359" y="84" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="11.5" fill="var(--server)">wss · TX ⇄ ACK / EVT</text>
+        <text x="359" y="112" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="currentColor">живое · обе стороны шлют сами</text>
+
+        <line x1="234" y1="162" x2="484" y2="162" stroke="currentColor" stroke-width="1.1" stroke-dasharray="5 4" marker-end="url(#a-fg)"/>
+        <text x="359" y="152" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="11.5" fill="currentColor">https · история, файлы</text>
+        <text x="359" y="180" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="currentColor">запрос-ответ · есть backpressure</text>
+
+        <text x="26" y="224" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--ink-faint)">две дорожки на клиенте · разные ключи · разные правила записи</text>
+      </svg>
+      </div>
+      <figcaption>
+        Два канала с разными задачами. Сплошная линия — живой дуплекс, по нему идут
+        только транзакции и подтверждения. Пунктир — HTTP для объёмных выборок.
+      </figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <h2 data-n="02">Почему счётчик, а не время</h2>
+    <p>
+      Курсор синхронизации должен двигаться строго вперёд и никогда не пропускать
+      записи. Метка времени этого не гарантирует: момент присвоения и момент
+      появления записи в базе — разные события, и порядок между ними расходится.
+    </p>
+
+    <figure>
+      <div class="scroller">
+      <svg viewBox="0 0 720 292" role="img" aria-label="Слева транзакция с меньшей меткой времени коммитится позже курсора и теряется навсегда; справа номер выдаётся в момент коммита и порядок номеров совпадает с порядком появления">
+        <text x="26" y="24" font-family="IBM Plex Mono, monospace" font-size="11.5" font-weight="600" fill="var(--alarm)">МЕТКА ПРИ ПРИЁМЕ</text>
+        <line x1="26" y1="33" x2="322" y2="33" stroke="var(--alarm)" stroke-width="1"/>
+
+        <text x="26" y="58" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--ink-faint)">приём</text>
+        <line x1="76" y1="54" x2="322" y2="54" stroke="currentColor" stroke-width=".8" opacity=".3"/>
+        <text x="26" y="150" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--ink-faint)">коммит</text>
+        <line x1="80" y1="146" x2="322" y2="146" stroke="currentColor" stroke-width=".8" opacity=".3"/>
+
+        <circle cx="112" cy="54" r="4" fill="var(--alarm)"/>
+        <text x="112" y="44" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="11" fill="var(--alarm)">A ts 100</text>
+        <path d="M112 60 L112 106 Q112 142 244 142" fill="none" stroke="var(--alarm)" stroke-width="1.4" marker-end="url(#a-alm)"/>
+        <text x="126" y="100" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--alarm)">долгий коммит</text>
+        <circle cx="250" cy="146" r="4" fill="var(--alarm)"/>
+
+        <circle cx="186" cy="54" r="4" fill="currentColor"/>
+        <text x="186" y="44" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="11" fill="currentColor">B ts 103</text>
+        <path d="M186 60 L186 140" fill="none" stroke="currentColor" stroke-width="1.2" marker-end="url(#a-fg)"/>
+        <circle cx="186" cy="146" r="4" fill="currentColor"/>
+
+        <line x1="216" y1="146" x2="216" y2="186" stroke="var(--client)" stroke-width="1.2" stroke-dasharray="3 3"/>
+        <text x="224" y="182" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--client)">клиент читает, видит только B</text>
+
+        <text x="26" y="216" font-family="IBM Plex Mono, monospace" font-size="11" fill="var(--client)">курсор := 103</text>
+        <text x="26" y="238" font-family="IBM Plex Mono, monospace" font-size="11" fill="currentColor">A появилась с ts 100 &lt; 103</text>
+        <text x="26" y="260" font-family="IBM Plex Mono, monospace" font-size="11" font-weight="600" fill="var(--alarm)">A не вернётся никогда</text>
+
+        <line x1="364" y1="16" x2="364" y2="276" stroke="currentColor" stroke-width="1" opacity=".22"/>
+
+        <text x="400" y="24" font-family="IBM Plex Mono, monospace" font-size="11.5" font-weight="600" fill="var(--server)">СЧЁТЧИК ПРИ КОММИТЕ</text>
+        <line x1="400" y1="33" x2="696" y2="33" stroke="var(--server)" stroke-width="1"/>
+
+        <text x="400" y="58" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--ink-faint)">приём</text>
+        <line x1="450" y1="54" x2="696" y2="54" stroke="currentColor" stroke-width=".8" opacity=".3"/>
+        <text x="400" y="150" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--ink-faint)">коммит</text>
+        <line x1="454" y1="146" x2="696" y2="146" stroke="currentColor" stroke-width=".8" opacity=".3"/>
+
+        <circle cx="486" cy="54" r="4" fill="currentColor"/>
+        <text x="486" y="44" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="11" fill="currentColor">A</text>
+        <path d="M486 60 L486 106 Q486 142 618 142" fill="none" stroke="currentColor" stroke-width="1.4" marker-end="url(#a-srv)"/>
+        <text x="500" y="100" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="currentColor">долгий коммит</text>
+
+        <circle cx="560" cy="54" r="4" fill="currentColor"/>
+        <text x="560" y="44" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="11" fill="currentColor">B</text>
+        <path d="M560 60 L560 140" fill="none" stroke="currentColor" stroke-width="1.2" marker-end="url(#a-srv)"/>
+
+        <circle cx="560" cy="146" r="4" fill="var(--server)"/>
+        <text x="560" y="166" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="11" font-weight="600" fill="var(--server)">idx 1</text>
+        <circle cx="624" cy="146" r="4" fill="var(--server)"/>
+        <text x="624" y="166" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="11" font-weight="600" fill="var(--server)">idx 2</text>
+
+        <text x="400" y="216" font-family="IBM Plex Mono, monospace" font-size="11" fill="var(--client)">курсор := 1</text>
+        <text x="400" y="238" font-family="IBM Plex Mono, monospace" font-size="11" fill="currentColor">A получила idx 2 &gt; 1</text>
+        <text x="400" y="260" font-family="IBM Plex Mono, monospace" font-size="11" font-weight="600" fill="var(--server)">A придёт следующим запросом</text>
+      </svg>
+      </div>
+      <figcaption>
+        Слева метка присвоена при приёме кадра: A получила меньшее значение, но
+        закоммитилась после того, как клиент прошёл эту точку. Справа номер выдаётся
+        внутри той же транзакции, что и запись, поэтому порядок номеров равен порядку
+        появления.
+      </figcaption>
+    </figure>
+
+    <div class="note">
+      <h3>Счётчик показывает пропуски</h3>
+      <p>
+        Пришли <code>45</code>, <code>46</code>, <code>48</code> — клиент видит, что
+        <code>47</code> не хватает, и запрашивает её кадром <code>FETCH</code>. С меткой
+        времени пропуск неотличим от паузы: клиент не знает, что что-то было.
+      </p>
+    </div>
+  </section>
+
+  <section>
+    <h2 data-n="03">Отправка</h2>
+    <p>
+      Клиент кладёт транзакцию в очередь неподтверждённых и отправляет кадр. В журнал
+      она попадает только после <code>ACK</code> — вместе с номером, который назначил
+      сервер. Остальным участникам тот же коммит уходит как <code>EVT</code>, поэтому
+      применение своей и чужой транзакции — одна ветка кода.
+    </p>
+
+    <figure>
+      <div class="scroller">
+      <svg viewBox="0 0 720 322" role="img" aria-label="Транзакция ложится в очередь неподтверждённых, уходит на сервер и переезжает в журнал только вместе с номером из подтверждения">
+        <rect x="20" y="30" width="232" height="272" fill="none" stroke="currentColor" stroke-width=".9" opacity=".35"/>
+        <text x="136" y="46" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10" letter-spacing="1.6" fill="var(--ink-faint)">КЛИЕНТ</text>
+
+        <text x="66" y="70" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="11" font-weight="600" fill="var(--client)">pending</text>
+        <text x="206" y="70" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="11" font-weight="600" fill="var(--server)">committed</text>
+        <text x="480" y="68" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="11" font-weight="600" fill="currentColor">сервер</text>
+        <text x="650" y="68" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="11" font-weight="600" fill="currentColor">другие</text>
+
+        <line x1="66"  y1="78" x2="66"  y2="302" stroke="var(--client)" stroke-width="1" stroke-dasharray="3 4"/>
+        <line x1="206" y1="78" x2="206" y2="302" stroke="var(--server)" stroke-width="1" stroke-dasharray="3 4"/>
+        <line x1="480" y1="78" x2="480" y2="302" stroke="currentColor" stroke-width="1" stroke-dasharray="3 4"/>
+        <line x1="650" y1="78" x2="650" y2="302" stroke="currentColor" stroke-width="1" stroke-dasharray="3 4"/>
+
+        <rect x="42" y="92" width="48" height="20" fill="var(--surface)" stroke="var(--client)" stroke-width="1.2"/>
+        <text x="66" y="106" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--client)">txid</text>
+        <text x="100" y="106" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="currentColor">нажали «отправить»</text>
+
+        <line x1="66" y1="140" x2="474" y2="140" stroke="var(--client)" stroke-width="1.4" marker-end="url(#a-cli)"/>
+        <text x="270" y="132" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="11" fill="var(--client)">TX { txid, op, payload }</text>
+
+        <rect x="432" y="156" width="176" height="60" fill="var(--surface)" stroke="var(--server)" stroke-width="1.2"/>
+        <text x="444" y="173" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="currentColor">txid знаком? → старый ACK</text>
+        <text x="444" y="189" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="currentColor">insert, idx = nextval()</text>
+        <text x="444" y="205" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="currentColor">commit</text>
+
+        <line x1="474" y1="240" x2="212" y2="240" stroke="var(--server)" stroke-width="1.4" marker-end="url(#a-srv)"/>
+        <text x="343" y="232" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="11" fill="var(--server)">ACK { txid, idx 51 }</text>
+
+        <line x1="486" y1="240" x2="644" y2="240" stroke="var(--server)" stroke-width="1.4" marker-end="url(#a-srv)"/>
+        <text x="565" y="232" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="11" fill="var(--server)">EVT { idx 51 }</text>
+
+        <line x1="72" y1="274" x2="176" y2="274" stroke="var(--client)" stroke-width="1.4" marker-end="url(#a-cli)"/>
+        <text x="124" y="266" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--client)">по txid</text>
+        <rect x="180" y="264" width="52" height="20" fill="var(--surface)" stroke="var(--server)" stroke-width="1.2"/>
+        <text x="206" y="278" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--server)">idx 51</text>
+
+        <text x="20" y="318" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--ink-faint)">до переезда сообщение не имеет номера и в журнале отсутствует</text>
+      </svg>
+      </div>
+      <figcaption>
+        Дорожка <em>pending</em> — локальная и нестабильная, ключ в ней <code>txid</code>.
+        Дорожка <em>committed</em> заполняется только кадрами с сервера, ключ в ней
+        <code>idx</code>. Переезд между дорожками — единственный способ попасть в журнал.
+      </figcaption>
+    </figure>
+
+    <div class="note">
+      <h3>Что видно до подтверждения</h3>
+      <p>
+        Строгая модель не рисует ничего до <code>ACK</code>, и при 200 мс задержки ввод
+        ощущается заторможенным. Прототип рисует сообщение сразу, но приглушённым и без
+        номера: оно живёт в очереди неподтверждённых, а не в журнале, поэтому требование
+        «актуально только то, что вернул сервер» соблюдено.
+      </p>
+    </div>
+  </section>
+
+  <section>
+    <h2 data-n="04">Обрыв и повтор</h2>
+    <p>
+      Соединение рвётся после того, как сервер записал транзакцию, но до того, как
+      подтверждение дошло. Клиент этих двух случаев не различает, поэтому переотправляет
+      всю очередь — а сервер узнаёт <code>txid</code> и возвращает исходный номер вместо
+      второй записи.
+    </p>
+
+    <figure>
+      <div class="scroller">
+      <svg viewBox="0 0 720 296" role="img" aria-label="После обрыва клиент присылает свой курсор, получает пропущенное, затем переотправляет неподтверждённое, и дедупликация по txid возвращает исходный номер вместо дубля">
+        <text x="86" y="24" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="11" font-weight="600" fill="currentColor">клиент</text>
+        <text x="556" y="24" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="11" font-weight="600" fill="currentColor">сервер</text>
+        <line x1="86"  y1="34" x2="86"  y2="284" stroke="currentColor" stroke-width="1" stroke-dasharray="3 4"/>
+        <line x1="556" y1="34" x2="556" y2="284" stroke="currentColor" stroke-width="1" stroke-dasharray="3 4"/>
+
+        <line x1="86" y1="58" x2="550" y2="58" stroke="var(--client)" stroke-width="1.4" marker-end="url(#a-cli)"/>
+        <text x="318" y="50" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="11" fill="var(--client)">TX { txid A }</text>
+        <text x="566" y="62" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--server)">записан, idx 53</text>
+
+        <line x1="550" y1="86" x2="92" y2="86" stroke="var(--alarm)" stroke-width="1.3" stroke-dasharray="6 4"/>
+        <text x="318" y="78" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="11" fill="var(--alarm)">ACK не дошёл</text>
+        <line x1="296" y1="76" x2="340" y2="98" stroke="var(--alarm)" stroke-width="1.6"/>
+        <line x1="340" y1="76" x2="296" y2="98" stroke="var(--alarm)" stroke-width="1.6"/>
+
+        <text x="20" y="112" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--client)">txid A остался в очереди</text>
+        <text x="20" y="128" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--ink-faint)">переподключение · бэкофф с разбросом</text>
+
+        <line x1="86" y1="156" x2="550" y2="156" stroke="var(--client)" stroke-width="1.4" marker-end="url(#a-cli)"/>
+        <text x="318" y="148" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="11" fill="var(--client)">HELLO { last_idx 52 }</text>
+
+        <line x1="550" y1="186" x2="92" y2="186" stroke="var(--server)" stroke-width="1.4" marker-end="url(#a-srv)"/>
+        <text x="318" y="178" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="11" fill="var(--server)">EVT { idx 53, txid A }</text>
+        <text x="100" y="202" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="currentColor">txid A найден у себя → это своё, не дубль</text>
+
+        <line x1="550" y1="226" x2="92" y2="226" stroke="var(--server)" stroke-width="1.4" marker-end="url(#a-srv)"/>
+        <text x="318" y="218" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="11" fill="var(--server)">SYNCED</text>
+        <text x="100" y="242" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="currentColor">только теперь повторяем очередь</text>
+
+        <line x1="86" y1="268" x2="550" y2="268" stroke="var(--client)" stroke-width="1.3" stroke-dasharray="5 3" marker-end="url(#a-cli)"/>
+        <text x="318" y="260" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="11" fill="var(--client)">TX { txid A } повтор</text>
+        <text x="566" y="266" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--server)">знаком →</text>
+        <text x="566" y="280" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="var(--server)">ACK idx 53</text>
+      </svg>
+      </div>
+      <figcaption>
+        Повтор безопасен, потому что номер выдаётся один раз на <code>txid</code>.
+        Очередь переотправляется после <code>SYNCED</code>, а не сразу при открытии сокета:
+        иначе новая транзакция получила бы номер раньше, чем клиент дочитал пропущенное.
+      </figcaption>
+    </figure>
+
+    <p>
+      Если разрыв был долгим и пропущено больше <code>500</code> записей, сервер не досылает
+      их поштучно, а отвечает <code>RESET</code>: клиент очищает журнал и забирает хвост по
+      HTTP. Порог выбран произвольно и должен быть померен — слишком малый даёт постоянные
+      сбросы в активных комнатах, слишком большой делает переподключение тяжёлым.
+    </p>
+  </section>
+
+  <section>
+    <h2 data-n="05">Кадры</h2>
+    <p>
+      Живость соединения проверяется отдельным пустым кадром раз в 30 секунд с обеих
+      сторон, три пропуска — переподключение. Это не опрос данных: новое сервер
+      присылает сам, спрашивать его не нужно.
+    </p>
+
+    <div class="scroller">
+      <table>
+        <thead>
+          <tr><th>Кадр</th><th>Направление</th><th>Назначение</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>HELLO</td><td class="dir-c">клиент → сервер</td><td>Токен и текущий <code>last_idx</code>. Открывает сессию.</td></tr>
+          <tr><td>EVT</td><td class="dir-s">сервер → клиент</td><td>Коммит, свой или чужой. Несёт <code>idx</code> и <code>txid</code>.</td></tr>
+          <tr><td>SYNCED</td><td class="dir-s">сервер → клиент</td><td>Досыл окончен. Сигнал повторить очередь.</td></tr>
+          <tr><td>TX</td><td class="dir-c">клиент → сервер</td><td>Транзакция: <code>txid</code>, операция, тело.</td></tr>
+          <tr><td>ACK</td><td class="dir-s">сервер → клиент</td><td>Принято, вот присвоенный <code>idx</code>.</td></tr>
+          <tr><td>NACK</td><td class="dir-s">сервер → клиент</td><td>Отказ с причиной. Транзакция не записана.</td></tr>
+          <tr><td>FETCH</td><td class="dir-c">клиент → сервер</td><td>Добор пропущенного диапазона номеров.</td></tr>
+          <tr><td>RESET</td><td class="dir-s">сервер → клиент</td><td>Разрыв слишком велик, журнал очистить.</td></tr>
+          <tr><td>PING / PONG</td><td class="dir-b">обе стороны</td><td>Живость сокета. Тела нет.</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p>
+      Операции внутри <code>TX</code>: <code>msg.send</code>, <code>msg.edit</code>,
+      <code>msg.delete</code>, <code>read.mark</code>, <code>reaction.add</code>.
+      Эфемерное — <code>typing</code>, <code>presence</code> — номера не получает,
+      не сохраняется и теряется без последствий.
+    </p>
+  </section>
+
+  <section>
+    <h2 data-n="06">Нерешённое</h2>
+    <div class="open">
+      <div>
+        <h3>Кто выдаёт номер</h3>
+        <p>
+          Последовательность в базе проще, но кладёт синхронный поход в базу на каждое
+          сообщение. Счётчик в памяти узла-владельца быстрее, но требует шардирования и
+          переезда комнаты при отказе узла. Выбор определяет всю топологию.
+        </p>
+      </div>
+      <div>
+        <h3>Отметки о прочтении</h3>
+        <p>
+          В общей нумерации на сотне участников их станет больше, чем сообщений. Либо
+          отдельный поток без общего номера, либо схлопывать до последней на участника.
+        </p>
+      </div>
+      <div>
+        <h3>Несколько устройств</h3>
+        <p>
+          У каждого свой курсор и своя очередь. Собственная транзакция приходит на второе
+          устройство как чужая — оно узнаёт её по <code>txid</code>, иначе в журнале
+          появится дубль.
+        </p>
+      </div>
+      <div>
+        <h3>Порядок своих транзакций</h3>
+        <p>
+          Отправленные подряд A и B получат номера в обратном порядке, если сеть их
+          переставила. Либо клиент нумерует свои кадры внутри сокета и сервер обязан этот
+          порядок соблюсти, либо расхождение принимается.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    mesera_proto · chat.v1 · черновик спецификации
+  </footer>
+
+</div>

@@ -1,0 +1,7 @@
+__pycache__/
+*.py[cod]
+mesera.db
+mesera.db-wal
+mesera.db-shm
+.venv/
+*.png

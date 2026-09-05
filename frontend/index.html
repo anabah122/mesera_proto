@@ -1,0 +1,45 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>mesera</title>
+<link rel="stylesheet" href="style.css">
+
+<!-- Экран входа -->
+<div id="gate" class="gate" hidden>
+  <form id="auth" class="auth">
+    <h1>mesera</h1>
+    <div class="tabs">
+      <button type="button" class="tab active" data-mode="login">Вход</button>
+      <button type="button" class="tab" data-mode="register">Регистрация</button>
+    </div>
+    <input id="login" placeholder="Логин" autocomplete="username" required>
+    <input id="password" type="password" placeholder="Пароль" autocomplete="current-password" required>
+    <input id="name" placeholder="Имя в системе" autocomplete="nickname" hidden>
+    <p id="authError" class="error" hidden></p>
+    <button class="primary" type="submit">Войти</button>
+  </form>
+</div>
+
+<!-- Основной экран -->
+<div id="app" class="app" hidden>
+  <aside class="sidebar">
+    <header class="sidebar-head">
+      <div>
+        <div id="myName" class="my-name"></div>
+        <div id="status" class="status offline">offline</div>
+      </div>
+      <button id="logout" class="ghost" title="Выйти">Выйти</button>
+    </header>
+    <div id="people" class="people"></div>
+  </aside>
+
+  <main class="chat">
+    <header id="chatHead" class="chat-head"><span class="muted">Выберите собеседника</span></header>
+    <div id="log" class="log"></div>
+    <form id="composer" class="composer" hidden>
+      <input id="input" placeholder="Сообщение" autocomplete="off">
+      <button class="primary" type="submit">Отправить</button>
+    </form>
+  </main>
+</div>
+
+<script type="module" src="app.js"></script>
