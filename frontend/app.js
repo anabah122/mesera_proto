@@ -1,11 +1,11 @@
 // Страница чата: локальное хранилище, соединение, отрисовка.
 // Авторизации здесь нет — без токена сразу уходим на страницу входа.
 
-import { Connection } from './connection.js?v=5';
-import { dialogId } from './protocol.js?v=5';
-import { Session } from './session.js?v=5';
-import { Storage } from './storage.js?v=5';
-import { DOC_USERS, Store, WINDOW } from './store.js?v=5';
+import { Connection } from './connection.js?v=6';
+import { dialogId } from './protocol.js?v=6';
+import { Session } from './session.js?v=6';
+import { Storage } from './storage.js?v=6';
+import { DOC_USERS, Store, WINDOW } from './store.js?v=6';
 
 const $ = (id) => document.getElementById(id);
 
