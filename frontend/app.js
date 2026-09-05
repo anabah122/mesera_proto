@@ -1,12 +1,13 @@
 // Страница чата: локальное хранилище, соединение, отрисовка.
 // Авторизации здесь нет — без токена сразу уходим на страницу входа.
 
-import { Connection } from './connection.js?v=8';
-import { prepare, upload } from './image.js?v=8';
-import { dialogId } from './protocol.js?v=8';
-import { Session } from './session.js?v=8';
-import { Storage } from './storage.js?v=8';
-import { DOC_USERS, Store, WINDOW } from './store.js?v=8';
+import { Connection } from './connection.js?v=9';
+import { EmojiPad } from './emoji.js?v=9';
+import { prepare, upload } from './image.js?v=9';
+import { dialogId } from './protocol.js?v=9';
+import { Session } from './session.js?v=9';
+import { Storage } from './storage.js?v=9';
+import { DOC_USERS, Store, WINDOW } from './store.js?v=9';
 
 const $ = (id) => document.getElementById(id);
 
@@ -192,40 +193,23 @@ viewer.onclick = closeViewer;
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
     if (!viewer.hidden) closeViewer();
-    else if (!emojiPad.hidden) emojiPad.hidden = true;
+    else if (!pad.hidden) pad.close();
     else if (replyTo) clearReply();
   }
 });
 
 // --- эмодзи ------------------------------------------------------------
 
-// Свой короткий набор вместо библиотеки: на фронтенде нет ни сборки,
-// ни зависимостей, и ради палитры заводить их незачем.
-const EMOJI = [
-  '😀', '😂', '🙂', '😉', '😍', '😘', '😎', '🤔',
-  '😐', '🙄', '😴', '😢', '😭', '😡', '🥳', '🤯',
-  '👍', '👎', '👌', '🙏', '👏', '💪', '🤝', '✌️',
-  '❤️', '🔥', '⭐', '✅', '❌', '❗', '❓', '💯',
-  '🎉', '🎁', '☕', '🍕', '🚀', '💻', '📌', '👀',
-];
-
-emojiPad.replaceChildren(...EMOJI.map((ch) => {
-  const el = document.createElement('button');
-  el.type = 'button';
-  el.className = 'emoji-cell';
-  el.textContent = ch;
-  el.onclick = () => insert(ch);
-  return el;
-}));
+const pad = new EmojiPad(emojiPad, insert);
 
 $('emoji').onclick = (e) => {
   e.stopPropagation();
-  emojiPad.hidden = !emojiPad.hidden;
+  pad.toggle();
 };
 
 // Клик мимо палитры закрывает её.
 document.addEventListener('click', (e) => {
-  if (!emojiPad.hidden && !emojiPad.contains(e.target)) emojiPad.hidden = true;
+  if (!pad.hidden && !pad.contains(e.target) && e.target !== $('emoji')) pad.close();
 });
 
 // Вставка идёт в позицию курсора, а не в конец строки.
@@ -235,41 +219,6 @@ function insert(ch) {
   input.value = input.value.slice(0, at) + ch + input.value.slice(to);
   input.focus();
   input.selectionStart = input.selectionEnd = at + ch.length;
-}
-
-// --- картинки ----------------------------------------------------------
-
-$('attach').onclick = () => $('file').click();
-
-$('file').onchange = (e) => {
-  const file = e.target.files[0];
-  if (file) sendImage(file);
-  // Сбрасываем, иначе повторный выбор того же файла не даст события.
-  e.target.value = '';
-};
-
-// Вставка из буфера: скриншот отправляется без сохранения на диск.
-input.onpaste = (e) => {
-  const item = [...e.clipboardData.items].find((i) => i.type.startsWith('image/'));
-  if (!item) return;
-  e.preventDefault();
-  sendImage(item.getAsFile());
-};
-
-async function sendImage(file) {
-  if (!peerId) return;
-  const doc = dialogId(me.id, peerId);
-  try {
-    // Сжатие и загрузка идут мимо сокета: в журнал попадёт только id.
-    const blob = await prepare(file);
-    const saved = await upload(blob, session.token);
-    conn.send(doc, 'msg.image', withReply({ file: saved.id, size: saved.size }));
-    clearReply();
-  } catch (err) {
-    // Загрузка не дошла до журнала, поэтому показать нечего кроме сообщения.
-    statusEl.textContent = err.message;
-    statusEl.className = 'status failed';
-  }
 }
 
 // --- отрисовка ---------------------------------------------------------
