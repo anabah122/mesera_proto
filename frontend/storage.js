@@ -8,7 +8,9 @@
 // Ограничение в тысячу записей относится к размеру одного запроса, а не к
 // объёму хранимого.
 
-const DB_NAME = 'mesera';
+// База своя на пользователя: в одном браузере могут работать разные люди,
+// и их журналы не должны попадать в одно хранилище.
+const DB_PREFIX = 'mesera';
 const DB_VERSION = 1;
 const ENTRIES = 'entries';
 const META = 'meta';
@@ -21,8 +23,9 @@ function request(req) {
 }
 
 export class Storage {
-  static async open() {
-    const req = indexedDB.open(DB_NAME, DB_VERSION);
+  static async open(userId) {
+    if (!userId) throw new Error('хранилище требует идентификатор пользователя');
+    const req = indexedDB.open(`${DB_PREFIX}:${userId}`, DB_VERSION);
     req.onupgradeneeded = () => {
       const db = req.result;
       db.createObjectStore(ENTRIES, { keyPath: ['doc', 'idx'] });

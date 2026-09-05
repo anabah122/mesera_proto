@@ -34,8 +34,9 @@ def ack(txid: str, doc: str, idx: int) -> dict:
     return {"t": ACK, "txid": txid, "doc": doc, "idx": idx}
 
 
-def nack(txid: str, reason: str) -> dict:
-    return {"t": NACK, "txid": txid, "reason": reason}
+def nack(txid: str, reason: str, fatal: bool = False) -> dict:
+    """Отказ. fatal — отвергнута сессия целиком, а не отдельная транзакция."""
+    return {"t": NACK, "txid": txid, "reason": reason, "fatal": fatal}
 
 
 def evt(entry: dict) -> dict:
@@ -47,5 +48,6 @@ def reset(doc: str, head: int) -> dict:
     return {"t": RESET, "doc": doc, "head": head}
 
 
-def pong() -> dict:
-    return {"t": PONG}
+def pong(ts: int = 0) -> dict:
+    """Серверное время: клиент сверяет по нему курсор общих действий."""
+    return {"t": PONG, "ts": ts}

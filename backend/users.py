@@ -11,6 +11,7 @@ import secrets
 import sqlite3
 import time
 
+import dialogs
 from db import Database
 
 # Параметры scrypt: цена памяти, размер блока, параллелизм.
@@ -71,6 +72,31 @@ class Users:
         if not row or not ok:
             raise UserError("неверный логин или пароль")
         return _public(row)
+
+    def log_add(self, user: dict) -> dict:
+        """Кладёт появление пользователя в журнал состава.
+
+        txid детерминирован по идентификатору: повторный вызов вернёт ту же
+        запись, а не заведёт вторую.
+        """
+        return self._db.append(
+            doc=dialogs.DOC_USERS,
+            txid="user.add:" + user["id"],
+            op="user.add",
+            author=user["id"],
+            body=user,
+            ts=user["created"],
+        )
+
+    def backfill(self) -> None:
+        """Заводит записи для пользователей, созданных до появления журнала."""
+        known = {
+            e["payload"]["id"]
+            for e in self._db.entries_after(dialogs.DOC_USERS, 0, 100000)
+        }
+        for user in self.all():
+            if user["id"] not in known:
+                self.log_add(user)
 
     def open_session(self, user_id: str) -> str:
         token = secrets.token_urlsafe(24)

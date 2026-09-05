@@ -23,6 +23,16 @@ def is_dialog(doc: str) -> bool:
     return doc.startswith("d:") and doc.count(":") == 2
 
 
+def can_read(doc: str, user_id: str) -> bool:
+    """Состав системы виден всем; диалог — только его паре."""
+    return doc == DOC_USERS or is_member(doc, user_id)
+
+
+def can_write(doc: str, user_id: str) -> bool:
+    """В журнал состава пишет только сервер: клиентские кадры туда не пускаем."""
+    return is_member(doc, user_id)
+
+
 def is_member(doc: str, user_id: str) -> bool:
     return is_dialog(doc) and user_id in members(doc)
 

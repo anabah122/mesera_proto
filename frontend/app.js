@@ -1,14 +1,15 @@
-// Сборка: сессия, локальное хранилище, соединение, отрисовка.
+// Страница чата: локальное хранилище, соединение, отрисовка.
+// Авторизации здесь нет — без токена сразу уходим на страницу входа.
 
-import { Connection } from './connection.js';
-import { dialogId } from './protocol.js';
-import { Session } from './session.js';
-import { Storage } from './storage.js';
-import { Store, WINDOW } from './store.js';
+import { Connection } from './connection.js?v=5';
+import { dialogId } from './protocol.js?v=5';
+import { Session } from './session.js?v=5';
+import { Storage } from './storage.js?v=5';
+import { DOC_USERS, Store, WINDOW } from './store.js?v=5';
 
 const $ = (id) => document.getElementById(id);
 
-const gate = $('gate'), app = $('app');
+const app = $('app');
 const logEl = $('log'), peopleEl = $('people'), chatHead = $('chatHead');
 const composer = $('composer'), input = $('input'), statusEl = $('status');
 
@@ -18,49 +19,30 @@ let people = [];
 let peerId = null;
 let loadingOlder = false;
 
-// --- вход --------------------------------------------------------------
+// --- сессия -----------------------------------------------------------
 
-let mode = 'login';
-
-document.querySelectorAll('.tab').forEach((tab) => {
-  tab.onclick = () => {
-    mode = tab.dataset.mode;
-    document.querySelectorAll('.tab').forEach((t) => t.classList.toggle('active', t === tab));
-    $('name').hidden = mode === 'login';
-    $('name').required = mode === 'register';
-    $('auth').querySelector('.primary').textContent = mode === 'login' ? 'Войти' : 'Создать';
-    $('authError').hidden = true;
-  };
-});
-
-$('auth').onsubmit = async (e) => {
-  e.preventDefault();
-  const err = $('authError');
-  err.hidden = true;
-  try {
-    const res = mode === 'login'
-      ? await Session.login($('login').value, $('password').value)
-      : await Session.register($('login').value, $('password').value, $('name').value);
-    Session.save(res);
-    await start(res);
-  } catch (e) {
-    err.textContent = e.message;
-    err.hidden = false;
-  }
-};
+const session = Session.load();
+// Страница чата без токена не работает — отправляем на вход.
+if (!session) location.replace('/');
 
 $('logout').onclick = () => {
   Session.clear();
-  location.reload();
+  location.replace('/');
 };
+
+function toGate(reason) {
+  Session.clear();
+  if (reason) sessionStorage.setItem('mesera.authError', reason);
+  location.replace('/');
+}
 
 // --- запуск ------------------------------------------------------------
 
 async function start(session) {
-  gate.hidden = true;
-  app.hidden = false;
+  // Журналы этого пользователя, а не браузера: в соседней вкладке может
+  // работать другой человек, его база отдельная.
+  storage = await Storage.open(session.me.id);
 
-  storage = await Storage.open();
   store = new Store(storage, render);
 
   conn = new Connection({
@@ -70,24 +52,37 @@ async function start(session) {
     docs: () => knownDocs(),
     onReady: onReady,
     onStatus: (s) => { statusEl.textContent = s; statusEl.className = 'status ' + s; },
+    // Токен протух — возвращаем на вход вместо бесконечных переподключений.
+    onFatal: (reason) => toGate(reason),
   });
   conn.setAuthor(session.me.id);
   conn.open();
 }
 
 function knownDocs() {
-  // До первого READY список людей неизвестен — курсоров нет, сервер пришлёт
-  // состав системы, и следующее подключение уже отправит полную карту.
-  return people.filter((u) => u.id !== me?.id).map((u) => dialogId(me.id, u.id));
+  // Журнал состава — всегда: из него строится список людей.
+  const docs = [DOC_USERS];
+  if (me) {
+    for (const u of people) if (u.id !== me.id) docs.push(dialogId(me.id, u.id));
+  }
+  return docs;
 }
 
 async function onReady(user, users) {
   me = user;
-  people = users;
   $('myName').textContent = me.name;
   conn.setAuthor(me.id);
-  renderPeople();
+  // ready — стартовый снимок. Дальше состав живёт транзакциями журнала,
+  // поэтому снимок кладём в тот же контейнер, что и они.
+  for (const u of users) if (!store.users.has(u.id)) store.users.set(u.id, u);
+  refreshPeople();
   if (peerId) await openDialog(peerId);
+}
+
+// Единственный источник списка людей — журнал состава.
+function refreshPeople() {
+  people = store.userList();
+  renderPeople();
 }
 
 // --- диалоги -----------------------------------------------------------
@@ -100,6 +95,7 @@ async function openDialog(id) {
   renderPeople();
 
   await store.openDoc(doc);
+  conn.setOpenDoc(doc);
   // Стартовое окно: если локально пусто, забираем хвост с сервера.
   if (!store.view.length) conn.fetchOlder(doc, 0, WINDOW);
   input.focus();
@@ -151,6 +147,13 @@ function bubble(text, meta, cls) {
   return el;
 }
 
+// Изменение store перерисовывает и список людей, и ленту: новый участник
+// должен появляться в сайдбаре сам, без перезагрузки.
+function onStoreChange() {
+  if (me) refreshPeople();
+  render();
+}
+
 function render() {
   if (!me || !store?.doc) return;
   const atBottom = logEl.scrollHeight - logEl.scrollTop - logEl.clientHeight < 80;
@@ -177,6 +180,8 @@ function render() {
 
 // --- старт -------------------------------------------------------------
 
-const saved = Session.load();
-if (saved) start(saved);
-else gate.hidden = false;
+if (session) {
+  // Промис обязателен к обработке: молча упавший старт оставил бы
+  // пустой экран без единого сообщения.
+  start(session).catch((e) => toGate(e.message));
+}

@@ -1,19 +1,23 @@
 // Транспорт: сокет, вход в сессию, проверка живости, переподключение.
 // О содержимом транзакций не знает — только доставляет кадры.
 
-import { T, txid } from './protocol.js';
+import { DOC_USERS, WINDOW } from './store.js?v=5';
+import { T, txid } from './protocol.js?v=5';
 
 const PING_INTERVAL = 30000;
 const BACKOFF_MIN = 500;
 const BACKOFF_MAX = 15000;
 
 export class Connection {
-  constructor({ token, store, docs, onReady, onStatus }) {
+  constructor({ token, store, docs, onReady, onStatus, onFatal }) {
     this._token = token;
     this._store = store;
     this._docs = docs;          // () => список документов, чьи курсоры шлём
     this._onReady = onReady;
     this._onStatus = onStatus;
+    this._onFatal = onFatal;    // сессия отвергнута — переподключаться незачем
+    this._openDoc = null;       // документ, открытый на экране
+    this._dead = false;
     this._ws = null;
     this._backoff = BACKOFF_MIN;
     this._pingTimer = null;
@@ -53,7 +57,7 @@ export class Connection {
       token: this._token,
       cursors: await this._store.cursors(this._docs()),
     });
-    this._pingTimer = setInterval(() => this._push({ t: T.PING }), PING_INTERVAL);
+    this._pingTimer = setInterval(() => this._ping(), PING_INTERVAL);
   }
 
   async _onFrame(f) {
@@ -80,12 +84,21 @@ export class Connection {
       }
 
       case T.NACK:
-        this._store.markFailed(f.txid, f.reason);
+        // Фатальный отказ относится не к транзакции, а к самой сессии:
+        // токен недействителен, дальше подключаться нечем.
+        if (f.fatal) {
+          this._dead = true;
+          this._onFatal?.(f.reason);
+        } else {
+          this._store.markFailed(f.txid, f.reason);
+        }
         break;
 
       case T.RESET:
         // Разрыв больше окна досыла — журнал документа пересобирается.
+        // Сразу забираем хвост, иначе документ остался бы пустым на экране.
         await this._store.reset(f.doc);
+        this._push({ t: T.FETCH, doc: f.doc, before: 0, limit: WINDOW });
         break;
 
       case T.SYNCED:
@@ -102,9 +115,33 @@ export class Connection {
     this._author = id;
   }
 
+  // Какой диалог открыт — по нему сверяется idx в heartbeat.
+  setOpenDoc(doc) {
+    this._openDoc = doc;
+  }
+
+  // Heartbeat несёт курсоры: idx открытого диалога и ts общих действий.
+  // Сервер досылает всё, чего у нас нет, не дожидаясь переподключения.
+  _ping() {
+    this._push({
+      t: T.PING,
+      doc: this._openDoc || '',
+      idx: this._openDoc ? (this._store.heads.get(this._openDoc) || 0) : 0,
+      users_idx: this._store.heads.get(DOC_USERS) || 0,
+      ts: this._store.lastTs || 0,
+    });
+  }
+
+  close() {
+    this._dead = true;
+    clearInterval(this._pingTimer);
+    this._ws?.close();
+  }
+
   _onClose() {
     clearInterval(this._pingTimer);
     this._onStatus('offline');
+    if (this._dead) return;
     const wait = this._backoff + Math.random() * 300;
     this._backoff = Math.min(this._backoff * 2, BACKOFF_MAX);
     setTimeout(() => this.open(), wait);

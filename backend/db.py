@@ -11,6 +11,7 @@
 
 import json
 import sqlite3
+import threading
 from pathlib import Path
 
 SCHEMA = """
@@ -55,6 +56,12 @@ CREATE UNIQUE INDEX IF NOT EXISTS entries_txid ON entries(doc, txid);
 
 class Database:
     def __init__(self, path: Path):
+        # Соединение одно на всё приложение и делится между потоками:
+        # синхронные обработчики uvicorn выполняются в пуле. sqlite3 не
+        # сериализует такие вызовы сам — курсоры затрут друг друга, — поэтому
+        # каждый доступ идёт под общим мьютексом.
+        # ponytail: один мьютекс на базу, пул соединений если упрёмся в запись
+        self._lock = threading.Lock()
         self._conn = sqlite3.connect(path, check_same_thread=False)
         self._conn.row_factory = sqlite3.Row
         self._conn.execute("PRAGMA journal_mode=WAL")
@@ -63,7 +70,8 @@ class Database:
         self._conn.commit()
 
     def close(self) -> None:
-        self._conn.close()
+        with self._lock:
+            self._conn.close()
 
     # --- журналы документов -------------------------------------------------
 
@@ -74,8 +82,8 @@ class Database:
         могут получить одинаковый idx. Повторный txid возвращает исходную
         запись, не создавая вторую.
         """
-        with self._conn:
-            known = self.entry_by_txid(doc, txid)
+        with self._lock, self._conn:
+            known = self._entry_by_txid(doc, txid)
             if known:
                 return known
 
@@ -99,39 +107,48 @@ class Database:
         }
 
     def entry_by_txid(self, doc: str, txid: str) -> dict | None:
+        with self._lock:
+            return self._entry_by_txid(doc, txid)
+
+    def _entry_by_txid(self, doc: str, txid: str) -> dict | None:
+        """Без блокировки: зовётся изнутри уже захваченной секции."""
         row = self._conn.execute(
             "SELECT * FROM entries WHERE doc = ? AND txid = ?", (doc, txid)
         ).fetchone()
         return _entry(row) if row else None
 
     def last_idx(self, doc: str) -> int:
-        row = self._conn.execute(
-            "SELECT last_idx FROM doc_head WHERE doc = ?", (doc,)
-        ).fetchone()
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT last_idx FROM doc_head WHERE doc = ?", (doc,)
+            ).fetchone()
         return row["last_idx"] if row else 0
 
     def entries_after(self, doc: str, idx: int, limit: int) -> list[dict]:
         """Записи с номером строго больше указанного, по возрастанию."""
-        rows = self._conn.execute(
-            "SELECT * FROM entries WHERE doc = ? AND idx > ? ORDER BY idx LIMIT ?",
-            (doc, idx, limit),
-        ).fetchall()
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT * FROM entries WHERE doc = ? AND idx > ? ORDER BY idx LIMIT ?",
+                (doc, idx, limit),
+            ).fetchall()
         return [_entry(r) for r in rows]
 
     def entries_before(self, doc: str, idx: int, limit: int) -> list[dict]:
         """Окно истории вверх от номера. Возвращается по возрастанию."""
-        rows = self._conn.execute(
-            "SELECT * FROM entries WHERE doc = ? AND idx < ? ORDER BY idx DESC LIMIT ?",
-            (doc, idx, limit),
-        ).fetchall()
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT * FROM entries WHERE doc = ? AND idx < ? ORDER BY idx DESC LIMIT ?",
+                (doc, idx, limit),
+            ).fetchall()
         return [_entry(r) for r in reversed(rows)]
 
     def tail(self, doc: str, limit: int) -> list[dict]:
         """Последние записи документа — стартовое окно клиента."""
-        rows = self._conn.execute(
-            "SELECT * FROM entries WHERE doc = ? ORDER BY idx DESC LIMIT ?",
-            (doc, limit),
-        ).fetchall()
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT * FROM entries WHERE doc = ? ORDER BY idx DESC LIMIT ?",
+                (doc, limit),
+            ).fetchall()
         return [_entry(r) for r in reversed(rows)]
 
 
