@@ -207,15 +207,41 @@ button.ghost:hover { color: var(--ink); }
 .msg .meta {
   font-size: 11px;
   color: var(--ink-mute);
-  margin-bottom: 2px;
+  /* Подпись снизу: время отправки под текстом, а не над ним. */
+  margin-top: 4px;
+  text-align: right;
 }
 .msg.own .meta { color: #b9d0e6; }
+
+/* Картинка в ленте. Высота ограничена, чтобы вертикальный снимок
+   не занимал весь экран; полный размер открывается по клику. */
+.shot {
+  display: block;
+  max-width: 100%;
+  max-height: 320px;
+  border-radius: 10px;
+  cursor: zoom-in;
+}
 
 /* Без подложки и разделителя: поле висит прямо над лентой. */
 .composer {
   display: flex;
   gap: 8px;
   padding: 12px 16px;
+  align-items: center;
 }
+
+/* Кнопка вложения: только значок, без рамки. */
+.icon {
+  border: 0;
+  background: transparent;
+  color: var(--ink-dim);
+  font-size: 18px;
+  line-height: 1;
+  padding: 6px 8px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.icon:hover { background: var(--sunken); color: var(--ink); }
 .composer input { flex: 1; border-radius: 18px; }
 .composer button { border-radius: 18px; }

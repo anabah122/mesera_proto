@@ -69,9 +69,11 @@ python tests/run_tests.py
 | Соединение | [`backend/session.py`](backend/session.py) | разбор кадров одного сокета |
 | Доставка | [`backend/hub.py`](backend/hub.py) | реестр живых сокетов |
 | Кадры | [`backend/protocol.py`](backend/protocol.py) | конструкторы кадров |
+| Вложения | [`backend/files.py`](backend/files.py) | файлы на диске, приём и отдача |
 | Транспорт | [`frontend/connection.js`](frontend/connection.js) | сокет, переподключение, живость |
 | Состояние | [`frontend/store.js`](frontend/store.js) | подтверждённое и неподтверждённое |
 | Локальная база | [`frontend/storage.js`](frontend/storage.js) | IndexedDB |
+| Картинки | [`frontend/image.js`](frontend/image.js) | сжатие в WebP, загрузка |
 | Экран | [`frontend/app.js`](frontend/app.js) | отрисовка, диалоги |
 
 ## Путь сообщения
@@ -115,6 +117,8 @@ Python 3.13, **FastAPI** поверх **uvicorn**, **SQLite**. Внешних з
 |---|---|---|
 | `POST /api/register` | [main.py:42](backend/main.py#L42-L53) | заводит человека, отдаёт токен, рассылает `user.add` |
 | `POST /api/login` | [main.py:55](backend/main.py#L55-L62) | проверяет пароль, отдаёт новый токен |
+| `POST /api/upload` | [main.py:64](backend/main.py#L64-L73) | приём вложения, отдаёт его идентификатор |
+| `GET /api/file/{id}` | [main.py:76](backend/main.py#L76-L83) | отдача вложения |
 | `GET /` | [main.py:64](backend/main.py#L64-L68) | страница входа |
 | `GET /chat` | [main.py:70](backend/main.py#L70-L74) | страница чата |
 | `WS /ws` | [main.py:82](backend/main.py#L82-L103) | всё остальное |
@@ -179,6 +183,23 @@ FastAPI выполняются в пуле, а `sqlite3` такие вызовы
 кто был заведён до появления журнала.
 
 Наружу уходит только [`_public()`](backend/users.py#L127-L135) — документ без соли и хэша.
+
+## Вложения — [`files.py`](backend/files.py)
+
+Картинка не помещается в журнал: base64 раздувает её на треть, а `hub` рассылает
+кадр целиком всем вкладкам — один снимок забил бы канал, за которым стоят живые
+сообщения. Поэтому тело идёт мимо сокета: файл заливается по HTTP, а в транзакцию
+`msg.image` попадает только идентификатор.
+
+Сжатие делает браузер ([`image.js`](frontend/image.js)): длинная сторона до 1600px,
+WebP с качеством 0.75, откат на JPEG для старых браузеров. Фото с телефона
+из четырёх мегабайт превращается в пару сотен килобайт. Сервер кодировщик
+не держит — `Pillow` в зависимости не попал.
+
+[Имя файла](backend/files.py#L48-L50) — случайные 32 символа, поэтому скачивание
+прав не проверяет: угадать нельзя, а токен в каждом `<img>` стоил бы дорого.
+[`path()`](backend/files.py#L52-L61) отсекает попытки выйти за каталог —
+идентификатор приходит из URL.
 
 ## Права — [`dialogs.py`](backend/dialogs.py)
 
@@ -353,7 +374,7 @@ FastAPI выполняются в пуле, а `sqlite3` такие вызовы
 
 # Тесты
 
-11 модулей, 105 тестов, каталог [`tests/`](tests/).
+12 модулей, 119 тестов, каталог [`tests/`](tests/).
 
 ```
 python tests/run_tests.py
@@ -379,6 +400,7 @@ python tests/run_tests.py
 | [`test_users_live.py`](tests/test_users_live.py) | живая рассылка состава |
 | [`test_frontend.mjs`](tests/test_frontend.mjs) | состояние клиента на фейковом хранилище |
 | [`test_storage.mjs`](tests/test_storage.mjs) | база на пользователя |
+| [`test_files.py`](tests/test_files.py) | вложения: типы, размеры, обход каталога |
 
 Клиентские тесты подменяют `indexedDB`, `localStorage` и `sessionStorage` заглушками,
 поэтому идут в Node без браузера.
@@ -400,8 +422,8 @@ docker compose up -d --build
 
 Локально без Docker — [`run.bat`](run.bat), порт 8100 с автоперезагрузкой.
 
-**Переменные:** `MESERA_DB` — путь к базе. В контейнере `/data/mesera.db` на томе,
-локально рядом с кодом.
+**Переменные:** `MESERA_DB` — путь к базе, `MESERA_FILES` — каталог вложений.
+В контейнере оба на томе, локально рядом с кодом.
 
 ---
 

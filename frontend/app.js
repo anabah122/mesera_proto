@@ -2,6 +2,7 @@
 // Авторизации здесь нет — без токена сразу уходим на страницу входа.
 
 import { Connection } from './connection.js?v=6';
+import { prepare, upload } from './image.js?v=6';
 import { dialogId } from './protocol.js?v=6';
 import { Session } from './session.js?v=6';
 import { Storage } from './storage.js?v=6';
@@ -124,6 +125,40 @@ composer.onsubmit = (e) => {
   input.value = '';
 };
 
+// --- картинки ----------------------------------------------------------
+
+$('attach').onclick = () => $('file').click();
+
+$('file').onchange = (e) => {
+  const file = e.target.files[0];
+  if (file) sendImage(file);
+  // Сбрасываем, иначе повторный выбор того же файла не даст события.
+  e.target.value = '';
+};
+
+// Вставка из буфера: скриншот отправляется без сохранения на диск.
+input.onpaste = (e) => {
+  const item = [...e.clipboardData.items].find((i) => i.type.startsWith('image/'));
+  if (!item) return;
+  e.preventDefault();
+  sendImage(item.getAsFile());
+};
+
+async function sendImage(file) {
+  if (!peerId) return;
+  const doc = dialogId(me.id, peerId);
+  try {
+    // Сжатие и загрузка идут мимо сокета: в журнал попадёт только id.
+    const blob = await prepare(file);
+    const saved = await upload(blob, session.token);
+    conn.send(doc, 'msg.image', { file: saved.id, size: saved.size });
+  } catch (err) {
+    // Загрузка не дошла до журнала, поэтому показать нечего кроме сообщения.
+    statusEl.textContent = err.message;
+    statusEl.className = 'status failed';
+  }
+}
+
 // --- отрисовка ---------------------------------------------------------
 
 function renderPeople() {
@@ -142,12 +177,33 @@ function renderPeople() {
   );
 }
 
-function bubble(text, meta, cls) {
+// Время отправки берётся из самой транзакции: ts проставляет сервер
+// в момент записи, поэтому у всех участников он одинаковый.
+function clock(ts) {
+  return new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
+
+function bubble(entry, meta, cls) {
   const el = document.createElement('div');
   el.className = 'msg ' + cls;
-  el.innerHTML = '<div class="meta"></div>';
-  el.firstChild.textContent = meta;
-  el.append(text);
+
+  if (entry.op === 'msg.image') {
+    const img = document.createElement('img');
+    img.className = 'shot';
+    img.loading = 'lazy';
+    img.src = '/api/file/' + entry.payload.file;
+    // Полный размер — тем же файлом, отдельной копии нет.
+    img.onclick = () => window.open(img.src, '_blank');
+    el.append(img);
+  } else {
+    el.append(document.createTextNode(entry.payload.text ?? ''));
+  }
+
+  // Подпись снизу: время у отправленного, состояние у неподтверждённого.
+  const foot = document.createElement('div');
+  foot.className = 'meta';
+  foot.textContent = meta;
+  el.append(foot);
   return el;
 }
 
@@ -166,13 +222,13 @@ function render() {
   logEl.replaceChildren(
     // Подтверждённое — в порядке номеров, назначенных сервером.
     ...store.view.map((e) =>
-      bubble(e.payload.text, '#' + e.idx, e.author === me.id ? 'own' : '')
+      bubble(e, clock(e.ts), e.author === me.id ? 'own' : '')
     ),
     // Неподтверждённое — ниже, номера у него ещё нет.
     ...store.unconfirmed()
       .filter((i) => i.doc === store.doc)
       .map((i) =>
-        bubble(i.payload.text, i.failed ? 'не отправлено: ' + i.reason : 'отправка…',
+        bubble(i, i.failed ? 'не отправлено: ' + i.reason : 'отправка…',
                'own ' + (i.failed ? 'failed' : 'pending'))
       )
   );

@@ -3,6 +3,7 @@
 __pycache__/
 *.py[cod]
 backend/mesera.db*
+backend/files/
 tests/
 docs/
 *.md

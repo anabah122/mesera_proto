@@ -5,3 +5,4 @@ mesera.db-wal
 mesera.db-shm
 .venv/
 *.png
+files/

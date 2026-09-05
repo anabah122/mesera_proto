@@ -4,7 +4,7 @@ import json
 import os
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -12,6 +12,7 @@ from pydantic import BaseModel
 import dialogs
 import protocol as p
 from db import Database
+from files import FileError, Files
 from hub import Hub
 from session import Session
 from users import UserError, Users
@@ -20,11 +21,14 @@ ROOT = Path(__file__).resolve().parent
 FRONTEND = ROOT.parent / "frontend"
 # В контейнере база лежит на томе; локально — рядом с кодом.
 DB_PATH = Path(os.environ.get("MESERA_DB") or ROOT / "mesera.db")
+# Вложения лежат рядом с базой: тот же том переживает пересборку образа.
+FILES_PATH = Path(os.environ.get("MESERA_FILES") or DB_PATH.parent / "files")
 
 app = FastAPI()
 DB_PATH.parent.mkdir(parents=True, exist_ok=True)
 db = Database(DB_PATH)
 users = Users(db)
+files = Files(FILES_PATH)
 hub = Hub()
 
 
@@ -59,6 +63,28 @@ def login(body: Credentials):
     except UserError as e:
         raise HTTPException(401, str(e))
     return {"token": users.open_session(user["id"]), "me": user}
+
+
+@app.post("/api/upload")
+async def upload(file: UploadFile, token: str = ""):
+    """Приём вложения. Тело идёт мимо сокета, в журнал попадёт только id."""
+    if not users.by_token(token):
+        raise HTTPException(401, "нужна сессия")
+    try:
+        saved = files.save(await file.read(), file.content_type or "")
+    except FileError as e:
+        raise HTTPException(400, str(e))
+    return saved
+
+
+@app.get("/api/file/{file_id}")
+def download(file_id: str):
+    """Отдача вложения. Имя случайное, поэтому прав не проверяем."""
+    path = files.path(file_id)
+    if not path:
+        raise HTTPException(404, "файл не найден")
+    # Содержимое неизменяемо: имя файла уникально, поэтому кешируем надолго.
+    return FileResponse(path, headers={"cache-control": "public, max-age=31536000, immutable"})
 
 
 @app.get("/")
