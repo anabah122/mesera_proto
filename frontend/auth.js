@@ -1,7 +1,7 @@
 // Страница входа. Знает только про HTTP-авторизацию.
 // Ни сокета, ни IndexedDB здесь нет: подняв токен, уходим на /chat.
 
-import { Session } from './session.js?v=6';
+import { Session } from './session.js?v=7';
 
 const $ = (id) => document.getElementById(id);
 
