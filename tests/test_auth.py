@@ -49,6 +49,20 @@ def test_pages_are_separate():
         assert chat.headers["cache-control"] == "no-cache"
 
 
+def test_pages_answer_head_requests():
+    """Браузер опрашивает адрес методом HEAD перед переходом.
+
+    @app.get отвечает на HEAD 404, и страница выглядит недоступной ещё
+    до первой загрузки — на мобильных это видно как «не удаётся получить
+    доступ к сайту».
+    """
+    with TestClient(app) as c:
+        for path in ("/", "/chat"):
+            res = c.head(path)
+            assert res.status_code == 200, f"HEAD {path} -> {res.status_code}"
+            assert "text/html" in res.headers["content-type"]
+
+
 def test_auth_and_chat_are_separate():
     with TestClient(app) as c:
         LOGIN = "probe_" + secrets.token_hex(4)

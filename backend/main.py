@@ -84,7 +84,7 @@ async def upload(file: UploadFile, token: str = ""):
     return saved
 
 
-@app.get("/api/file/{file_id}")
+@app.api_route("/api/file/{file_id}", methods=["GET", "HEAD"])
 def download(file_id: str):
     """Отдача вложения. Имя случайное, поэтому прав не проверяем."""
     path = files.path(file_id)
@@ -94,13 +94,16 @@ def download(file_id: str):
     return FileResponse(path, headers={"cache-control": "public, max-age=31536000, immutable"})
 
 
-@app.get("/")
+# HEAD наравне с GET: браузеры и предзагрузчики опрашивают адрес этим
+# методом перед переходом, а @app.get на него отвечает 404 — страница
+# выглядит недоступной ещё до первой загрузки.
+@app.api_route("/", methods=["GET", "HEAD"])
 def page_login():
     """Страница входа: только форма, никакого сокета."""
     return _page("index.html")
 
 
-@app.get("/chat")
+@app.api_route("/chat", methods=["GET", "HEAD"])
 def page_chat():
     """Страница чата. Токен проверяется на HELLO, без него клиент уйдёт на вход."""
     return _page("chat.html")
