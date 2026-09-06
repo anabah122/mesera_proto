@@ -22,6 +22,38 @@ export class Store {
     this.heads = new Map();      // doc -> номер последней известной записи
     this.users = new Map();      // id -> пользователь, собран из журнала состава
     this.lastTs = 0;             // время последнего общего действия
+    this._muted = 0;             // глубина пакетной вставки
+    this._missed = false;        // менялось ли что-то, пока молчали
+  }
+
+  /** Копит изменения и перерисовывает один раз в конце.
+   *
+   * Досыл после разрыва приходит поштучно: без этого каждая из сотен
+   * записей перекладывала бы весь экран.
+   */
+  async batch(fn) {
+    this._muted++;
+    try {
+      await fn();
+    } finally {
+      this._muted--;
+      if (!this._muted && this._unsorted) {
+        this._unsorted = false;
+        this.view.sort((a, b) => a.idx - b.idx);
+      }
+      if (!this._muted && this._missed) {
+        this._missed = false;
+        this._onChange();
+      }
+    }
+  }
+
+  _changed() {
+    if (this._muted) {
+      this._missed = true;
+      return;
+    }
+    this._onChange();
   }
 
   // Журнал состава разбирается в список людей. Пересборка идемпотентна:
@@ -49,7 +81,7 @@ export class Store {
     // номер, а не ноль, иначе сервер дошлёт уже имеющееся.
     const head = await this._storage.head(doc);
     if (head > (this.heads.get(doc) || 0)) this.heads.set(doc, head);
-    this._onChange();
+    this._changed();
   }
 
   async cursors(docs) {
@@ -60,7 +92,7 @@ export class Store {
 
   addPending(txid, doc, op, payload) {
     this.pending.set(txid, { txid, doc, op, payload, failed: false });
-    this._onChange();
+    this._changed();
   }
 
   unconfirmed() {
@@ -72,7 +104,7 @@ export class Store {
     if (!item) return;
     item.failed = true;
     item.reason = reason;
-    this._onChange();
+    this._changed();
   }
 
   // Единственный путь записи в committed — запись, вернувшаяся с сервера.
@@ -85,7 +117,7 @@ export class Store {
       this._applyUser(entry);
       const head = this.heads.get(DOC_USERS) || 0;
       if (entry.idx > head) this.heads.set(DOC_USERS, entry.idx);
-      this._onChange();
+      this._changed();
       return;
     }
 
@@ -94,9 +126,12 @@ export class Store {
 
     if (entry.doc === this.doc && !this.view.some((e) => e.idx === entry.idx)) {
       this.view.push(entry);
-      this.view.sort((a, b) => a.idx - b.idx);
+      // В пакете сортируем один раз в конце: досыл идёт по возрастанию,
+      // и пересортировывать растущий массив на каждой записи незачем.
+      if (this._muted) this._unsorted = true;
+      else this.view.sort((a, b) => a.idx - b.idx);
     }
-    this._onChange();
+    this._changed();
   }
 
   // Догрузка вверх: сначала из локальной базы, и только если там пусто —
@@ -107,7 +142,7 @@ export class Store {
     const older = await this._storage.window(this.doc, oldest, limit);
     if (older.length) {
       this.view = older.concat(this.view);
-      this._onChange();
+      this._changed();
     }
     return older.length;
   }
@@ -120,6 +155,6 @@ export class Store {
     await this._storage.drop(doc);
     if (doc === this.doc) this.view = [];
     this.heads.set(doc, 0);
-    this._onChange();
+    this._changed();
   }
 }

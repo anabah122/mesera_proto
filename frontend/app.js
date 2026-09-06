@@ -1,13 +1,13 @@
 // Страница чата: локальное хранилище, соединение, отрисовка.
 // Авторизации здесь нет — без токена сразу уходим на страницу входа.
 
-import { Connection } from './connection.js?v=14';
-import './vendor/picker.js?v=14';
-import { prepare, upload } from './image.js?v=14';
-import { dialogId } from './protocol.js?v=14';
-import { Session } from './session.js?v=14';
-import { Storage } from './storage.js?v=14';
-import { DOC_USERS, Store, WINDOW } from './store.js?v=14';
+import { Connection } from './connection.js?v=15';
+import './vendor/picker.js?v=15';
+import { prepare, upload } from './image.js?v=15';
+import { dialogId } from './protocol.js?v=15';
+import { Session } from './session.js?v=15';
+import { Storage } from './storage.js?v=15';
+import { DOC_USERS, Store, WINDOW } from './store.js?v=15';
 
 // Сколько сообщений держим в DOM. Окно в памяти больше, но рисовать его
 // целиком нельзя: на телефоне тысячи узлов кладут вкладку.
@@ -107,10 +107,19 @@ async function start(session) {
 }
 
 function knownDocs() {
+  // Кто мы — берём из сессии, а не из me: HELLO собирается до прихода
+  // READY, и на первом подключении me ещё пуст. Пока здесь стояло me,
+  // курсоры по диалогам не отправлялись вовсе, и сервер каждый раз
+  // досылал переписку с нуля.
+  const myId = session?.me?.id;
   // Журнал состава — всегда: из него строится список людей.
   const docs = [DOC_USERS];
-  if (me) {
-    for (const u of people) if (u.id !== me.id) docs.push(dialogId(me.id, u.id));
+  if (!myId) return docs;
+
+  // Собеседники известны из журнала состава, поднятого из локальной базы
+  // ещё до соединения, поэтому список полон уже на первом HELLO.
+  for (const u of store.userList()) {
+    if (u.id !== myId) docs.push(dialogId(myId, u.id));
   }
   return docs;
 }
@@ -240,7 +249,7 @@ document.addEventListener('keydown', (e) => {
 // Готовый компонент emoji-picker-element: полный набор, поиск, тона кожи,
 // недавние. Лежит в vendor/ — в рантайме внешних загрузок нет.
 const picker = document.createElement('emoji-picker');
-picker.dataSource = '/vendor/emoji-data.json?v=14';
+picker.dataSource = '/vendor/emoji-data.json?v=15';
 picker.locale = 'ru';
 picker.addEventListener('emoji-click', (e) => insert(e.detail.unicode));
 emojiPad.append(picker);

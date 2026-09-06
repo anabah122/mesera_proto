@@ -1,8 +1,8 @@
 // Транспорт: сокет, вход в сессию, проверка живости, переподключение.
 // О содержимом транзакций не знает — только доставляет кадры.
 
-import { DOC_USERS, WINDOW } from './store.js?v=14';
-import { T, txid } from './protocol.js?v=14';
+import { DOC_USERS, WINDOW } from './store.js?v=15';
+import { T, txid } from './protocol.js?v=15';
 
 const PING_INTERVAL = 30000;
 const BACKOFF_MIN = 500;
@@ -40,6 +40,9 @@ export class Connection {
 
   // Догрузка истории с сервера — когда в локальной базе больше ничего нет.
   fetchOlder(doc, before, limit) {
+    // Ответ на FETCH приходит поштучно и завершающего кадра не имеет,
+    // поэтому пакет закрываем по паузе в потоке записей.
+    this._openBatch();
     this._push({ t: T.FETCH, doc, before, limit });
   }
 
@@ -57,6 +60,9 @@ export class Connection {
       token: this._token,
       cursors: await this._store.cursors(this._docs()),
     });
+    // Досыл после HELLO приходит поштучно; экран трогаем один раз,
+    // когда придёт SYNCED.
+    this._openBatch();
     this._pingTimer = setInterval(() => this._ping(), PING_INTERVAL);
   }
 
@@ -67,7 +73,9 @@ export class Connection {
         break;
 
       case T.EVT:
+        // Досыл идёт поштучно: копим и рисуем один раз, когда поток стихнет.
         await this._store.commit(f);
+        this._nudgeBatch();
         break;
 
       case T.ACK: {
@@ -102,6 +110,7 @@ export class Connection {
         break;
 
       case T.SYNCED:
+        this._closeBatch();
         // Досыл окончен: только теперь повторяем неподтверждённое, иначе
         // новая транзакция получила бы номер раньше, чем клиент дочитал старое.
         for (const item of this._store.unconfirmed()) {
@@ -113,6 +122,26 @@ export class Connection {
 
   setAuthor(id) {
     this._author = id;
+  }
+
+  // Пакет держится обещанием: store перерисует экран, когда мы его закроем.
+  _openBatch() {
+    if (this._endBatch) return;
+    this._store.batch(() => new Promise((done) => { this._endBatch = done; }));
+  }
+
+  _closeBatch() {
+    clearTimeout(this._batchTimer);
+    this._batchTimer = null;
+    this._endBatch?.();
+    this._endBatch = null;
+  }
+
+  // Поток записей идёт сплошняком; тишина в кадр означает, что досыл кончился.
+  _nudgeBatch() {
+    if (!this._endBatch) return;
+    clearTimeout(this._batchTimer);
+    this._batchTimer = setTimeout(() => this._closeBatch(), 50);
   }
 
   // Какой диалог открыт — по нему сверяется idx в heartbeat.
@@ -147,6 +176,8 @@ export class Connection {
 
   _onClose() {
     clearInterval(this._pingTimer);
+    // Иначе оборванный досыл запер бы перерисовку до конца сеанса.
+    this._closeBatch();
     this._onStatus('offline');
     // Остановлено намеренно — не воскрешаем.
     if (this._stopped) return;
