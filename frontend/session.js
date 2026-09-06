@@ -33,8 +33,8 @@ export const Session = {
     localStorage.removeItem(KEY);
   },
 
-  async register(login, password, name) {
-    return post('/api/register', { login, password, name });
+  async register(login, password, name, invite) {
+    return post('/api/register', { login, password, name, invite });
   },
 
   async login(login, password) {

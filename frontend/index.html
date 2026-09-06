@@ -2,7 +2,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>mesera — вход</title>
-<link rel="stylesheet" href="style.css?v=13">
+<link rel="stylesheet" href="style.css?v=14">
 
 <div id="gate" class="gate">
   <form id="auth" class="auth">
@@ -13,10 +13,12 @@
     </div>
     <input id="login" placeholder="Логин" autocomplete="username" required>
     <input id="password" type="password" placeholder="Пароль" autocomplete="current-password" required>
+    <input id="password2" type="password" placeholder="Пароль ещё раз" autocomplete="new-password" hidden>
     <input id="name" placeholder="Имя в системе" autocomplete="nickname" hidden>
+    <input id="invite" placeholder="Секретное слово" autocomplete="off" hidden>
     <p id="authError" class="error" hidden></p>
     <button class="primary" type="submit">Войти</button>
   </form>
 </div>
 
-<script type="module" src="auth.js?v=13"></script>
+<script type="module" src="auth.js?v=14"></script>

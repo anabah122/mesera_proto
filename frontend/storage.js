@@ -87,6 +87,23 @@ export class Storage {
     return key ? key[1] : 0;
   }
 
+  /** Стирает всё локальное: журналы, служебные записи, саму базу. */
+  static async wipe(userId) {
+    const name = `${DB_PREFIX}:${userId}`;
+    return new Promise((resolve, reject) => {
+      const req = indexedDB.deleteDatabase(name);
+      req.onsuccess = () => resolve();
+      req.onerror = () => reject(req.error);
+      // Удаление ждёт закрытия всех соединений: если другая вкладка держит
+      // базу открытой, запрос повиснет молча.
+      req.onblocked = () => reject(new Error('база открыта в другой вкладке'));
+    });
+  }
+
+  close() {
+    this._db.close();
+  }
+
   async drop(doc) {
     const tx = this._db.transaction(ENTRIES, 'readwrite');
     tx.objectStore(ENTRIES).delete(IDBKeyRange.bound([doc, 0], [doc, []]));

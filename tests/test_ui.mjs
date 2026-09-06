@@ -100,6 +100,43 @@ const tests = {
     assert.match(src, /input\.onpaste/, 'вставка из буфера не обрабатывается');
     assert.match(src, /msg\.image/, 'картинка не отправляется в журнал');
   },
+  // --- меню и лимит отрисовки ----------------------------------------------
+
+  'меню действий заменило кнопку выхода'() {
+    assert.match(html, /id="menuBtn"/, 'кнопки меню нет');
+    assert.match(html, /id="wipe"/, 'нет пункта удаления локальных данных');
+    assert.match(html, /id="logout"[^>]*class="menu-item/, 'выход должен быть пунктом меню');
+    const tag = html.match(/<div id="menu"[^>]*>/);
+    assert.match(tag[0], /hidden/, 'меню должно быть закрыто изначально');
+  },
+
+  'удаление локальных данных стирает базу целиком'() {
+    const storage = readFileSync(new URL('../frontend/storage.js', import.meta.url), 'utf8');
+    assert.match(storage, /deleteDatabase/, 'база не удаляется');
+    assert.match(storage, /onblocked/, 'удаление повиснет молча, если база открыта');
+
+    const app = readFileSync(new URL('../frontend/app.js', import.meta.url), 'utf8');
+    // Пока сокет жив, он переподключится и снова откроет базу.
+    assert.match(app, /conn\?\.stop\(\)/, 'соединение не останавливается перед удалением');
+    assert.match(app, /storage\?\.close\(\)/, 'база не закрывается перед удалением');
+  },
+
+  'отрисовка ограничена, иначе длинный диалог кладёт телефон'() {
+    const app = readFileSync(new URL('../frontend/app.js', import.meta.url), 'utf8');
+    const limit = Number(app.match(/RENDER_LIMIT = (\d+)/)?.[1] ?? 0);
+    assert.ok(limit > 0 && limit <= 300, `лимит отрисовки неразумен: ${limit}`);
+    assert.match(app, /store\.view\.slice\(-\(RENDER_LIMIT/, 'лента рисуется целиком');
+    assert.match(app, /shownExtra = 0/, 'счётчик не сбрасывается при смене диалога');
+  },
+
+  'форма регистрации требует слово и повтор пароля'() {
+    const index = readFileSync(new URL('../frontend/index.html', import.meta.url), 'utf8');
+    assert.match(index, /id="password2"/, 'нет повтора пароля');
+    assert.match(index, /id="invite"/, 'нет поля секретного слова');
+
+    const auth = readFileSync(new URL('../frontend/auth.js', import.meta.url), 'utf8');
+    assert.match(auth, /пароли не совпадают/, 'совпадение паролей не проверяется');
+  },
 };
 
 let failed = 0;

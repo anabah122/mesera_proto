@@ -1,13 +1,21 @@
 // Страница чата: локальное хранилище, соединение, отрисовка.
 // Авторизации здесь нет — без токена сразу уходим на страницу входа.
 
-import { Connection } from './connection.js?v=13';
-import './vendor/picker.js?v=13';
-import { prepare, upload } from './image.js?v=13';
-import { dialogId } from './protocol.js?v=13';
-import { Session } from './session.js?v=13';
-import { Storage } from './storage.js?v=13';
-import { DOC_USERS, Store, WINDOW } from './store.js?v=13';
+import { Connection } from './connection.js?v=14';
+import './vendor/picker.js?v=14';
+import { prepare, upload } from './image.js?v=14';
+import { dialogId } from './protocol.js?v=14';
+import { Session } from './session.js?v=14';
+import { Storage } from './storage.js?v=14';
+import { DOC_USERS, Store, WINDOW } from './store.js?v=14';
+
+// Сколько сообщений держим в DOM. Окно в памяти больше, но рисовать его
+// целиком нельзя: на телефоне тысячи узлов кладут вкладку.
+const RENDER_LIMIT = 200;
+
+// Сколько записей добавлено сверх лимита кнопкой «показать ещё».
+// Сбрасывается при смене диалога: новый диалог начинается с хвоста.
+let shownExtra = 0;
 
 const $ = (id) => document.getElementById(id);
 
@@ -32,9 +40,37 @@ const session = Session.load();
 // Страница чата без токена не работает — отправляем на вход.
 if (!session) location.replace('/');
 
+// --- меню действий -----------------------------------------------------
+
+const menu = $('menu');
+
+$('menuBtn').onclick = (e) => {
+  e.stopPropagation();
+  menu.hidden = !menu.hidden;
+};
+
+document.addEventListener('click', (e) => {
+  if (!menu.hidden && !menu.contains(e.target)) menu.hidden = true;
+});
+
 $('logout').onclick = () => {
   Session.clear();
   location.replace('/');
+};
+
+$('wipe').onclick = async () => {
+  menu.hidden = true;
+  if (!confirm('Удалить локальные данные? История заново загрузится с сервера.')) return;
+  try {
+    // Соединение с базой закрываем сами: пока оно живо, удаление повиснет.
+    conn?.stop();
+    storage?.close();
+    await Storage.wipe(session.me.id);
+    location.reload();
+  } catch (err) {
+    statusEl.textContent = err.message;
+    statusEl.className = 'status failed';
+  }
 };
 
 function toGate(reason) {
@@ -101,6 +137,7 @@ function refreshPeople() {
 async function openDialog(id) {
   peerId = id;
   clearReply();
+  shownExtra = 0;
   const doc = dialogId(me.id, peerId);
   chatHead.textContent = people.find((u) => u.id === peerId)?.name || peerId;
   composer.hidden = false;
@@ -203,7 +240,7 @@ document.addEventListener('keydown', (e) => {
 // Готовый компонент emoji-picker-element: полный набор, поиск, тона кожи,
 // недавние. Лежит в vendor/ — в рантайме внешних загрузок нет.
 const picker = document.createElement('emoji-picker');
-picker.dataSource = '/vendor/emoji-data.json?v=13';
+picker.dataSource = '/vendor/emoji-data.json?v=14';
 picker.locale = 'ru';
 picker.addEventListener('emoji-click', (e) => insert(e.detail.unicode));
 emojiPad.append(picker);
@@ -345,6 +382,19 @@ function bubble(entry, meta, cls) {
   return el;
 }
 
+// Отметка о скрытой части истории. Клик показывает ещё одно окно.
+function older(count) {
+  const el = document.createElement('button');
+  el.type = 'button';
+  el.className = 'older';
+  el.textContent = `Показать ещё (выше ${count})`;
+  el.onclick = () => {
+    shownExtra += RENDER_LIMIT;
+    render();
+  };
+  return el;
+}
+
 // Прокрутка к оригиналу с короткой подсветкой.
 function scrollTo(idx) {
   const target = logEl.querySelector(`[data-idx="${idx}"]`);
@@ -366,9 +416,16 @@ function render() {
   const atBottom = logEl.scrollHeight - logEl.scrollTop - logEl.clientHeight < 80;
   const before = logEl.scrollHeight;
 
+  // Рисуем только хвост окна. Остальное лежит в памяти и в базе — его
+  // видно после прокрутки вверх, но в разметку оно не попадает.
+  const shown = store.view.slice(-(RENDER_LIMIT + shownExtra));
+  const hidden = store.view.length - shown.length;
+
   logEl.replaceChildren(
+    // Сколько записей осталось выше — иначе прокрутка молча упирается.
+    ...(hidden > 0 ? [older(hidden)] : []),
     // Подтверждённое — в порядке номеров, назначенных сервером.
-    ...store.view.map((e) =>
+    ...shown.map((e) =>
       bubble(e, clock(e.ts), e.author === me.id ? 'own' : '')
     ),
     // Неподтверждённое — ниже, номера у него ещё нет.

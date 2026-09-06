@@ -17,6 +17,7 @@ from fastapi.testclient import TestClient
 
 import dialogs
 import main
+import users as users_mod
 from db import Database
 from files import FileError, Files
 from users import Users
@@ -35,7 +36,7 @@ PNG = bytes.fromhex(
 
 
 def _token(c):
-    body = {"login": "f_" + secrets.token_hex(4), "password": "secret123", "name": "F"}
+    body = {"login": "f_" + secrets.token_hex(4), "password": "secret123", "name": "F", "invite": users_mod.INVITE}
     return c.post("/api/register", json=body).json()["token"]
 
 
@@ -144,10 +145,10 @@ def test_image_message_carries_only_the_identifier():
     """В журнал попадает ссылка, а не тело картинки."""
     with TestClient(app) as c:
         alice = c.post("/api/register", json={
-            "login": "img_" + secrets.token_hex(4), "password": "secret123", "name": "A",
+            "login": "img_" + secrets.token_hex(4), "password": "secret123", "name": "A", "invite": users_mod.INVITE,
         }).json()
         bob = c.post("/api/register", json={
-            "login": "img_" + secrets.token_hex(4), "password": "secret123", "name": "B",
+            "login": "img_" + secrets.token_hex(4), "password": "secret123", "name": "B", "invite": users_mod.INVITE,
         }).json()
         doc = dialogs.dialog_id(alice["me"]["id"], bob["me"]["id"])
         file_id = _upload(c, alice["token"]).json()["id"]
@@ -169,10 +170,10 @@ def test_transactions_carry_a_server_timestamp():
     """Время отправки берётся из транзакции, клиент его не присылает."""
     with TestClient(app) as c:
         alice = c.post("/api/register", json={
-            "login": "ts_" + secrets.token_hex(4), "password": "secret123", "name": "A",
+            "login": "ts_" + secrets.token_hex(4), "password": "secret123", "name": "A", "invite": users_mod.INVITE,
         }).json()
         bob = c.post("/api/register", json={
-            "login": "ts_" + secrets.token_hex(4), "password": "secret123", "name": "B",
+            "login": "ts_" + secrets.token_hex(4), "password": "secret123", "name": "B", "invite": users_mod.INVITE,
         }).json()
         doc = dialogs.dialog_id(alice["me"]["id"], bob["me"]["id"])
 

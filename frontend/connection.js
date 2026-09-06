@@ -1,8 +1,8 @@
 // Транспорт: сокет, вход в сессию, проверка живости, переподключение.
 // О содержимом транзакций не знает — только доставляет кадры.
 
-import { DOC_USERS, WINDOW } from './store.js?v=13';
-import { T, txid } from './protocol.js?v=13';
+import { DOC_USERS, WINDOW } from './store.js?v=14';
+import { T, txid } from './protocol.js?v=14';
 
 const PING_INTERVAL = 30000;
 const BACKOFF_MIN = 500;
@@ -138,9 +138,18 @@ export class Connection {
     this._ws?.close();
   }
 
+  /** Закрывает соединение навсегда: переподключения не будет. */
+  stop() {
+    this._stopped = true;
+    clearInterval(this._pingTimer);
+    this._ws?.close();
+  }
+
   _onClose() {
     clearInterval(this._pingTimer);
     this._onStatus('offline');
+    // Остановлено намеренно — не воскрешаем.
+    if (this._stopped) return;
     if (this._dead) return;
     const wait = this._backoff + Math.random() * 300;
     this._backoff = Math.min(this._backoff * 2, BACKOFF_MAX);

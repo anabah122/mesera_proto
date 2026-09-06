@@ -17,6 +17,7 @@ from fastapi.testclient import TestClient
 
 import dialogs
 import main
+import users as users_mod
 from db import Database
 from users import Users
 
@@ -26,7 +27,7 @@ app = main.app
 
 
 def _user(c, tag="u"):
-    body = {"login": f"{tag}_{secrets.token_hex(4)}", "password": "secret123", "name": tag}
+    body = {"login": f"{tag}_{secrets.token_hex(4)}", "password": "secret123", "name": tag, "invite": users_mod.INVITE}
     return c.post("/api/register", json=body).json()
 
 

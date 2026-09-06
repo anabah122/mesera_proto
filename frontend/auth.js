@@ -1,7 +1,7 @@
 // Страница входа. Знает только про HTTP-авторизацию.
 // Ни сокета, ни IndexedDB здесь нет: подняв токен, уходим на /chat.
 
-import { Session } from './session.js?v=13';
+import { Session } from './session.js?v=14';
 
 const $ = (id) => document.getElementById(id);
 
@@ -22,8 +22,11 @@ document.querySelectorAll('.tab').forEach((tab) => {
   tab.onclick = () => {
     mode = tab.dataset.mode;
     document.querySelectorAll('.tab').forEach((t) => t.classList.toggle('active', t === tab));
-    $('name').hidden = mode === 'login';
-    $('name').required = mode === 'register';
+    // Поля регистрации показываются только в своём режиме.
+    for (const id of ['password2', 'name', 'invite']) {
+      $(id).hidden = mode === 'login';
+      $(id).required = mode === 'register';
+    }
     $('auth').querySelector('.primary').textContent = mode === 'login' ? 'Войти' : 'Создать';
     $('authError').hidden = true;
   };
@@ -36,9 +39,13 @@ $('auth').onsubmit = async (e) => {
   err.hidden = true;
   submit.disabled = true;
   try {
+    if (mode === 'register' && $('password').value !== $('password2').value) {
+      throw new Error('пароли не совпадают');
+    }
     const res = mode === 'login'
       ? await Session.login($('login').value, $('password').value)
-      : await Session.register($('login').value, $('password').value, $('name').value);
+      : await Session.register($('login').value, $('password').value,
+                               $('name').value, $('invite').value);
     Session.save(res);
     location.assign('/chat');
   } catch (e2) {

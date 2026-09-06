@@ -46,12 +46,14 @@ class Credentials(BaseModel):
     login: str
     password: str
     name: str = ""
+    # Слово-приглашение: нужно только при регистрации.
+    invite: str = ""
 
 
 @app.post("/api/register")
 async def register(body: Credentials):
     try:
-        user = users.register(body.login, body.password, body.name)
+        user = users.register(body.login, body.password, body.name, body.invite)
     except UserError as e:
         raise HTTPException(400, str(e))
     # Появление пользователя — такая же транзакция, как сообщение: она ложится

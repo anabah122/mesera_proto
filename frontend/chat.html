@@ -2,7 +2,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>mesera</title>
-<link rel="stylesheet" href="style.css?v=13">
+<link rel="stylesheet" href="style.css?v=14">
 
 <div id="app" class="app">
   <aside class="sidebar">
@@ -11,7 +11,13 @@
         <div id="myName" class="my-name"></div>
         <div id="status" class="status offline">offline</div>
       </div>
-      <button id="logout" class="ghost" title="Выйти">Выйти</button>
+      <div class="menu-wrap">
+        <button id="menuBtn" class="icon" title="Действия">&#8942;</button>
+        <div id="menu" class="menu" hidden>
+          <button id="wipe" type="button" class="menu-item">Удалить локальные данные</button>
+          <button id="logout" type="button" class="menu-item danger">Выйти</button>
+        </div>
+      </div>
     </header>
     <div id="people" class="people"></div>
   </aside>
@@ -44,4 +50,4 @@
   <img id="viewerImg" alt="">
 </div>
 
-<script type="module" src="app.js?v=13"></script>
+<script type="module" src="app.js?v=14"></script>

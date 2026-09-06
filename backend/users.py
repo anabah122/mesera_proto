@@ -7,6 +7,7 @@
 
 import hashlib
 import hmac
+import os
 import secrets
 import sqlite3
 import time
@@ -16,6 +17,10 @@ from db import Database
 
 # Параметры scrypt: цена памяти, размер блока, параллелизм.
 _N, _R, _P = 2 ** 14, 8, 1
+
+# Слово-приглашение: без него регистрация закрыта. Меняется через
+# переменную окружения, не требуя пересборки образа.
+INVITE = os.environ.get("MESERA_INVITE") or "teology"
 
 
 def _derive(password: str, salt: bytes) -> bytes:
@@ -31,9 +36,12 @@ class Users:
         self._db = db
         self._conn = db._conn
 
-    def register(self, login: str, password: str, name: str) -> dict:
+    def register(self, login: str, password: str, name: str, invite: str = "") -> dict:
         login = login.strip().lower()
         name = name.strip()
+        # Сравнение постоянного времени: по времени ответа слово не подобрать.
+        if not hmac.compare_digest(invite.strip(), INVITE):
+            raise UserError("неверное секретное слово")
         if len(login) < 3:
             raise UserError("логин короче трёх символов")
         if len(password) < 6:

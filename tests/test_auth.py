@@ -17,6 +17,7 @@ from pathlib import Path
 from fastapi.testclient import TestClient
 
 import main
+import users as users_mod
 from db import Database
 from users import Users
 
@@ -51,7 +52,7 @@ def test_pages_are_separate():
 def test_auth_and_chat_are_separate():
     with TestClient(app) as c:
         LOGIN = "probe_" + secrets.token_hex(4)
-        creds = {"login": LOGIN, "password": "secret123", "name": "Probe"}
+        creds = {"login": LOGIN, "password": "secret123", "name": "Probe", "invite": users_mod.INVITE}
 
         # Регистрация — только HTTP, сокет не открывается.
         r = c.post("/api/register", json=creds)

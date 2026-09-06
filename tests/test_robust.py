@@ -17,6 +17,7 @@ from pathlib import Path
 from fastapi.testclient import TestClient
 
 import main
+import users as users_mod
 from db import Database
 from users import Users
 
@@ -27,7 +28,7 @@ app = main.app
 
 
 def _token(c):
-    body = {"login": "r_" + secrets.token_hex(4), "password": "secret123", "name": "R"}
+    body = {"login": "r_" + secrets.token_hex(4), "password": "secret123", "name": "R", "invite": users_mod.INVITE}
     return c.post("/api/register", json=body).json()["token"]
 
 
