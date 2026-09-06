@@ -1,13 +1,15 @@
 // Страница чата: локальное хранилище, соединение, отрисовка.
 // Авторизации здесь нет — без токена сразу уходим на страницу входа.
 
-import { Connection } from './connection.js?v=15';
-import './vendor/picker.js?v=15';
-import { prepare, upload } from './image.js?v=15';
-import { dialogId } from './protocol.js?v=15';
-import { Session } from './session.js?v=15';
-import { Storage } from './storage.js?v=15';
-import { DOC_USERS, Store, WINDOW } from './store.js?v=15';
+// Первым: перехват сбоев палитры должен встать до её импорта.
+import './guard.js?v=16';
+import { Connection } from './connection.js?v=16';
+import './vendor/picker.js?v=16';
+import { prepare, upload } from './image.js?v=16';
+import { dialogId } from './protocol.js?v=16';
+import { Session } from './session.js?v=16';
+import { Storage } from './storage.js?v=16';
+import { DOC_USERS, Store, WINDOW } from './store.js?v=16';
 
 // Сколько сообщений держим в DOM. Окно в памяти больше, но рисовать его
 // целиком нельзя: на телефоне тысячи узлов кладут вкладку.
@@ -249,7 +251,10 @@ document.addEventListener('keydown', (e) => {
 // Готовый компонент emoji-picker-element: полный набор, поиск, тона кожи,
 // недавние. Лежит в vendor/ — в рантайме внешних загрузок нет.
 const picker = document.createElement('emoji-picker');
-picker.dataSource = '/vendor/emoji-data.json?v=15';
+// Полный адрес от текущей страницы, а не путь от корня: браузер считает
+// запрос по абсолютному пути обращением в другое адресное пространство
+// и режет его политикой Private Network Access.
+picker.dataSource = new URL('vendor/emoji-data.json?v=16', location.href).href;
 picker.locale = 'ru';
 picker.addEventListener('emoji-click', (e) => insert(e.detail.unicode));
 emojiPad.append(picker);

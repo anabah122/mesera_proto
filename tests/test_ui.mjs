@@ -100,6 +100,30 @@ const tests = {
     assert.match(src, /input\.onpaste/, 'вставка из буфера не обрабатывается');
     assert.match(src, /msg\.image/, 'картинка не отправляется в журнал');
   },
+  // --- устойчивость к сбою палитры ------------------------------------------
+
+  'сбой палитры не уносит весь чат'() {
+    // Регрессия: fetch за базой эмодзи резался политикой Private Network
+    // Access, необработанный промис ронял app.js, страница была пустой.
+    const guard = readFileSync(new URL('../frontend/guard.js', import.meta.url), 'utf8');
+    assert.match(guard, /unhandledrejection/, 'перехват не поставлен');
+    assert.match(guard, /preventDefault/, 'ошибка не гасится');
+
+    const app = readFileSync(new URL('../frontend/app.js', import.meta.url), 'utf8');
+    const guardAt = app.indexOf("guard.js");
+    const pickerAt = app.indexOf("vendor/picker.js");
+    assert.ok(guardAt > 0 && guardAt < pickerAt,
+      'перехват должен импортироваться до палитры, иначе не успеет');
+  },
+
+  'база эмодзи запрашивается адресом от страницы'() {
+    // Путь от корня браузер считает обращением в чужое адресное
+    // пространство и режет его.
+    const app = readFileSync(new URL('../frontend/app.js', import.meta.url), 'utf8');
+    assert.match(app, /dataSource = new URL\(/, 'путь снова абсолютный');
+    assert.doesNotMatch(app, /dataSource = '\//, 'путь от корня не годится');
+  },
+
   // --- меню и лимит отрисовки ----------------------------------------------
 
   'меню действий заменило кнопку выхода'() {
