@@ -2,14 +2,14 @@
 // Авторизации здесь нет — без токена сразу уходим на страницу входа.
 
 // Первым: перехват сбоев палитры должен встать до её импорта.
-import './guard.js?v=16';
-import { Connection } from './connection.js?v=16';
-import './vendor/picker.js?v=16';
-import { prepare, upload } from './image.js?v=16';
-import { dialogId } from './protocol.js?v=16';
-import { Session } from './session.js?v=16';
-import { Storage } from './storage.js?v=16';
-import { DOC_USERS, Store, WINDOW } from './store.js?v=16';
+import './guard.js?v=17';
+import { Connection } from './connection.js?v=17';
+import './vendor/picker.js?v=17';
+import { prepare, upload } from './image.js?v=17';
+import { dialogId } from './protocol.js?v=17';
+import { Session } from './session.js?v=17';
+import { Storage } from './storage.js?v=17';
+import { DOC_USERS, Store, WINDOW } from './store.js?v=17';
 
 // Сколько сообщений держим в DOM. Окно в памяти больше, но рисовать его
 // целиком нельзя: на телефоне тысячи узлов кладут вкладку.
@@ -149,8 +149,11 @@ async function openDialog(id) {
   peerId = id;
   clearReply();
   shownExtra = 0;
+  // На узком экране показывается что-то одно: список или переписка.
+  app.classList.add('at-dialog');
   const doc = dialogId(me.id, peerId);
-  chatHead.textContent = people.find((u) => u.id === peerId)?.name || peerId;
+  chatHead.replaceChildren(backButton(),
+    document.createTextNode(people.find((u) => u.id === peerId)?.name || peerId));
   composer.hidden = false;
   renderPeople();
 
@@ -254,7 +257,7 @@ const picker = document.createElement('emoji-picker');
 // Полный адрес от текущей страницы, а не путь от корня: браузер считает
 // запрос по абсолютному пути обращением в другое адресное пространство
 // и режет его политикой Private Network Access.
-picker.dataSource = new URL('vendor/emoji-data.json?v=16', location.href).href;
+picker.dataSource = new URL('vendor/emoji-data.json?v=17', location.href).href;
 picker.locale = 'ru';
 picker.addEventListener('emoji-click', (e) => insert(e.detail.unicode));
 emojiPad.append(picker);
@@ -322,6 +325,17 @@ async function sendImage(file) {
     statusEl.textContent = err.message;
     statusEl.className = 'status failed';
   }
+}
+
+// Возврат к списку людей: на узком экране диалог занимает весь экран.
+function backButton() {
+  const el = document.createElement('button');
+  el.type = 'button';
+  el.className = 'icon back';
+  el.title = 'К списку';
+  el.textContent = '←';
+  el.onclick = () => app.classList.remove('at-dialog');
+  return el;
 }
 
 // --- отрисовка ---------------------------------------------------------
@@ -461,5 +475,32 @@ function render() {
 if (session) {
   // Промис обязателен к обработке: молча упавший старт оставил бы
   // пустой экран без единого сообщения.
-  start(session).catch((e) => toGate(e.message));
+  start(session).catch(fail);
 }
+
+// Сбой при запуске показываем на месте, а не уводим на страницу входа:
+// на телефоне консоли нет, и пустой экран не объясняет ничего.
+function fail(e) {
+  const box = document.createElement('div');
+  box.className = 'fail';
+  box.innerHTML = '<h2></h2><p></p><button type="button">Очистить и войти заново</button>';
+  box.children[0].textContent = 'Чат не запустился';
+  box.children[1].textContent = e?.message || String(e);
+  box.children[2].onclick = async () => {
+    try {
+      conn?.stop();
+      storage?.close();
+      await Storage.wipe(session.me.id);
+    } catch {
+      // Не вышло — всё равно уходим на вход, там сессия чистится.
+    }
+    Session.clear();
+    location.replace('/');
+  };
+  document.body.replaceChildren(box);
+}
+
+// Ошибки после запуска тоже не должны оставлять пустой экран.
+window.addEventListener('error', (e) => {
+  if (!document.querySelector('.fail') && !me) fail(e.error || e.message);
+});

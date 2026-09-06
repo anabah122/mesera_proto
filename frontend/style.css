@@ -509,3 +509,69 @@ emoji-picker {
   border-radius: 14px;
 }
 .older:hover { color: var(--ink); }
+
+
+/* --- экран сбоя --------------------------------------------------------- */
+
+/* Показывается вместо чата, когда запуск не удался: на телефоне консоли
+   нет, и пустая страница не объясняет ничего. */
+.fail {
+  max-width: 420px;
+  margin: 12vh auto;
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel);
+  text-align: center;
+}
+
+.fail h2 { margin: 0 0 8px; font-size: 17px; }
+
+.fail p {
+  margin: 0 0 16px;
+  color: var(--warn);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.fail button {
+  padding: 10px 18px;
+  background: var(--accent);
+  color: #fff;
+}
+.fail button:hover { background: var(--accent-2); }
+
+
+/* --- узкий экран -------------------------------------------------------- */
+
+/* На телефоне две колонки не помещаются: сайдбар съедал бы две трети
+   ширины. Показываем что-то одно — список людей или открытый диалог. */
+@media (max-width: 720px) {
+  /* 100vh на мобильных больше видимой области из-за адресной строки:
+     низ страницы уезжает под неё. dvh считает по-настоящему видимое. */
+  body { height: 100dvh; }
+  .app { height: 100dvh; grid-template-columns: 1fr; }
+
+  /* Открытый диалог закрывает список, и наоборот. */
+  .app.at-dialog .sidebar { display: none; }
+  .app:not(.at-dialog) .chat { display: none; }
+
+  .msg { max-width: 82%; }
+
+  /* Палитра шире экрана — прижимаем к краям. */
+  .emoji-pad { left: 8px; right: 8px; }
+  emoji-picker { width: 100%; height: 320px; }
+
+  /* Кнопка ответа висела за пределами пузыря — на узком экране это выход
+     за край. Прячем внутрь. */
+  .reply-btn { right: 4px; opacity: .5; }
+  .msg.own .reply-btn { right: 4px; left: auto; }
+
+  .viewer { padding: 12px; }
+
+  /* Возврат к списку нужен только здесь: на широком экране список виден. */
+  .back { display: inline-block; }
+}
+
+/* На широком экране список людей и так на виду. */
+.back { display: none; }

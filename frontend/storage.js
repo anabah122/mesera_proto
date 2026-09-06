@@ -22,16 +22,34 @@ function request(req) {
   });
 }
 
+// Сколько ждём открытия базы. Мобильные браузеры в приватном режиме
+// и при нехватке места умеют не отвечать вовсе — без предела приложение
+// повисло бы на пустом экране навсегда.
+const OPEN_TIMEOUT = 8000;
+
 export class Storage {
   static async open(userId) {
     if (!userId) throw new Error('хранилище требует идентификатор пользователя');
+    if (!globalThis.indexedDB) throw new Error('браузер не поддерживает локальное хранилище');
+
     const req = indexedDB.open(`${DB_PREFIX}:${userId}`, DB_VERSION);
     req.onupgradeneeded = () => {
       const db = req.result;
       db.createObjectStore(ENTRIES, { keyPath: ['doc', 'idx'] });
       db.createObjectStore(META, { keyPath: 'key' });
     };
-    return new Storage(await request(req));
+
+    const db = await new Promise((resolve, reject) => {
+      const timer = setTimeout(
+        () => reject(new Error('локальное хранилище не отвечает')), OPEN_TIMEOUT);
+      const done = (fn) => (arg) => { clearTimeout(timer); fn(arg); };
+      req.onsuccess = done(() => resolve(req.result));
+      req.onerror = done(() => reject(req.error || new Error('хранилище недоступно')));
+      // Другая вкладка держит базу открытой на старой версии.
+      req.onblocked = done(() => reject(new Error('база открыта в другой вкладке')));
+    });
+
+    return new Storage(db);
   }
 
   constructor(db) {
@@ -52,6 +70,9 @@ export class Storage {
     return new Promise((resolve, reject) => {
       tx.oncomplete = resolve;
       tx.onerror = () => reject(tx.error);
+      // Место кончилось — на мобильных квота невелика. Это не повод
+      // ронять сеанс: журнал доберётся с сервера.
+      tx.onabort = () => reject(tx.error || new Error('нет места в хранилище'));
     });
   }
 
