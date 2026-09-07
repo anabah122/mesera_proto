@@ -2,17 +2,18 @@
 // Авторизации здесь нет — без токена сразу уходим на страницу входа.
 
 // Первым: перехват сбоев палитры должен встать до её импорта.
-import './guard.js?v=25';
-import { Connection } from './connection.js?v=25';
-import './vendor/picker.js?v=25';
-import { prepare, upload } from './image.js?v=25';
-import { dialogId } from './protocol.js?v=25';
-import { Session } from './session.js?v=25';
-import { Storage } from './storage.js?v=25';
-import { DOC_USERS, isMessage, Store, WINDOW } from './store.js?v=25';
-import { Badge } from './badge.js?v=25';
-import { Sound } from './sound.js?v=25';
-import { Presence, presenceLabel } from './presence.js?v=25';
+import './guard.js?v=28';
+import { Connection } from './connection.js?v=28';
+import './vendor/picker.js?v=28';
+import { prepare, upload } from './image.js?v=28';
+import { dialogId } from './protocol.js?v=28';
+import { Session } from './session.js?v=28';
+import { Storage } from './storage.js?v=28';
+import { DOC_USERS, isMessage, Store, WINDOW } from './store.js?v=28';
+import { Badge } from './badge.js?v=28';
+import { Sound } from './sound.js?v=28';
+import { linkify } from './linkify.js?v=28';
+import { Presence, presenceLabel } from './presence.js?v=28';
 
 // Сколько сообщений держим в DOM. Окно в памяти больше, но рисовать его
 // целиком нельзя: на телефоне тысячи узлов кладут вкладку.
@@ -220,6 +221,25 @@ logEl.onscroll = async () => {
   loadingOlder = false;
 };
 
+// Высота поля идёт за содержимым: сброс, затем замер по scrollHeight.
+// Пол и потолок заданы в CSS (min-height / max-height): пустое поле
+// остаётся в одну строку, переросшее скроллится внутри себя.
+function autoGrow() {
+  input.style.height = 'auto';
+  input.style.height = `${input.scrollHeight}px`;
+}
+
+input.addEventListener('input', autoGrow);
+
+// Enter отправляет, Shift+Enter переносит строку. На узких экранах
+// клавиатуры Enter обычно и есть перенос, поэтому там не перехватываем.
+input.addEventListener('keydown', (e) => {
+  if (e.key !== 'Enter' || e.shiftKey || e.isComposing) return;
+  if (window.matchMedia('(max-width: 640px)').matches) return;
+  e.preventDefault();
+  composer.requestSubmit();
+});
+
 composer.onsubmit = (e) => {
   e.preventDefault();
   const text = input.value.trim();
@@ -233,6 +253,7 @@ composer.onsubmit = (e) => {
 
   conn.send(dialogId(me.id, peerId), 'msg.send', withReply({ text }));
   input.value = '';
+  autoGrow();
   clearReply();
 };
 
@@ -310,7 +331,7 @@ const picker = document.createElement('emoji-picker');
 // Полный адрес от текущей страницы, а не путь от корня: браузер считает
 // запрос по абсолютному пути обращением в другое адресное пространство
 // и режет его политикой Private Network Access.
-picker.dataSource = new URL('vendor/emoji-data.json?v=25', location.href).href;
+picker.dataSource = new URL('vendor/emoji-data.json?v=28', location.href).href;
 picker.locale = 'ru';
 picker.addEventListener('emoji-click', (e) => insert(e.detail.unicode));
 emojiPad.append(picker);
@@ -342,6 +363,7 @@ function insert(ch) {
   const at = input.selectionStart ?? input.value.length;
   const to = input.selectionEnd ?? at;
   input.value = input.value.slice(0, at) + ch + input.value.slice(to);
+  autoGrow();
   input.focus();
   input.selectionStart = input.selectionEnd = at + ch.length;
 }
@@ -514,8 +536,10 @@ function bubble(entry, meta, cls) {
   } else {
     // Текст берём с учётом правок: оригинал остаётся в журнале,
     // а на экране стоит последняя версия.
-    el.append(document.createTextNode(
-      entry.idx ? store.textOf(entry) : entry.payload.text ?? ''));
+    const body = document.createElement('span');
+    body.className = 'text';
+    body.append(...linkify(entry.idx ? store.textOf(entry) : entry.payload.text ?? ''));
+    el.append(body);
   }
 
   // Подпись снизу: время у отправленного, состояние у неподтверждённого.
@@ -577,6 +601,7 @@ function startEdit(entry) {
   clearReply();
   editing = entry;
   input.value = store.textOf(entry);
+  autoGrow();
   replyBar.querySelector('.reply-who').textContent = 'Изменение';
   replyBar.querySelector('.reply-text').textContent = store.textOf(entry);
   replyBar.hidden = false;
@@ -586,6 +611,7 @@ function startEdit(entry) {
 function clearEdit() {
   editing = null;
   input.value = '';
+  autoGrow();
   replyBar.hidden = true;
 }
 

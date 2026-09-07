@@ -136,7 +136,7 @@ body {
   font: 14px/1.5 'Noto Sans', system-ui, -apple-system, sans-serif, 'Noto Color Emoji';
 }
 
-input {
+input, textarea {
   border: 0;
   border-radius: 8px;
   padding: 10px 12px;
@@ -144,7 +144,7 @@ input {
   color: inherit;
   font: inherit;
 }
-input:focus { outline: 1px solid var(--accent-2); }
+input:focus, textarea:focus { outline: 1px solid var(--accent-2); }
 
 button { border: 0; font: inherit; cursor: pointer; border-radius: 8px; }
 button.primary { padding: 10px 18px; background: var(--accent); color: #fff; }
@@ -318,6 +318,13 @@ button.ghost:hover { color: var(--ink); }
   overflow-wrap: anywhere;
 }
 .msg.own { align-self: flex-end; background: var(--accent); }
+
+/* Переносы строк из ввода сохраняются. Только на самом тексте: на всём
+   пузыре pre-wrap подхватил бы отступы разметки вокруг цитаты и подписи. */
+.msg .text { display: block; white-space: pre-wrap; }
+
+.msg .text a { color: var(--accent-2); text-decoration: underline; }
+.msg.own .text a { color: #dceaf7; }
 /* Неподтверждённое: номера ещё нет, поэтому и вид другой. */
 .msg.pending { opacity: .45; }
 .msg.failed  { background: #5c2a2a; opacity: 1; }
@@ -348,7 +355,7 @@ button.ghost:hover { color: var(--ink); }
   display: flex;
   gap: 8px;
   padding: 12px 16px;
-  align-items: center;
+  align-items: flex-end;
   /* Опора для палитры эмодзи: она всплывает над кнопкой. */
   position: relative;
 }
@@ -365,7 +372,17 @@ button.ghost:hover { color: var(--ink); }
   cursor: pointer;
 }
 .icon:hover { background: var(--sunken); color: var(--ink); }
-.composer input { flex: 1; border-radius: 18px; }
+/* Пустое поле ровно в одну строку, как прежний input: 20px текста плюс
+   паддинги. Дальше растёт вверх по содержимому до потолка. */
+.composer textarea {
+  flex: 1;
+  border-radius: 18px;
+  resize: none;
+  overflow-y: auto;
+  line-height: 20px;
+  min-height: 40px;
+  max-height: 140px;
+}
 .composer button { border-radius: 18px; }
 
 
