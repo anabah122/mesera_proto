@@ -14,6 +14,11 @@ from users import Users
 # клиент забирает хвост через HTTP.
 GAP_LIMIT = 1000
 
+# Как часто обновляем last_seen по ходу живой сессии. Пока сокет жив,
+# человек и так онлайн; запись нужна на случай, если сервер упадёт и
+# закрыть соединения по-человечески не успеет.
+SEEN_INTERVAL = 5 * 60 * 1000
+
 
 def _num(value, default: int = 0) -> int:
     """Число из клиентского поля. Мусор — значение по умолчанию, не падение."""
@@ -31,6 +36,8 @@ class Session:
         self._hub = hub
         self._me: dict | None = None
         self._closed = False
+        self._seen_at = 0  # когда последний раз писали last_seen
+        self._active = True  # вкладка на виду; фоновая присутствием не считается
 
     @property
     def user_id(self) -> str | None:
@@ -52,8 +59,24 @@ class Session:
         return not self._closed
 
     async def close(self) -> None:
-        if self._me:
-            self._hub.remove(self._me["id"], self._ws)
+        if not self._me:
+            return
+        # Ушёл только тот, у кого закрылась последняя вкладка.
+        gone = self._hub.remove(self._me["id"], self._ws)
+        if not gone:
+            return
+        now = int(time.time() * 1000)
+        self._users.touch(self._me["id"], now)
+        await self._hub.broadcast(p.presence(self._me["id"], False, now))
+
+    async def _send_entries(self, entries: list[dict]) -> None:
+        """Досыл журнала одним кадром.
+
+        Пустую пачку не шлём: кадр без записей клиенту ничего не сообщает,
+        а границу досыла держит SYNCED, а не EVTS.
+        """
+        if entries:
+            await self._ws.send_json(p.evts(entries))
 
     # --- кадры --------------------------------------------------------------
 
@@ -71,8 +94,13 @@ class Session:
         if self._me:
             self._hub.remove(self._me["id"], self._ws)
         self._me = me
-        self._hub.add(me["id"], self._ws)
-        await self._ws.send_json(p.ready(me, self._users.all()))
+        appeared = self._hub.add(me["id"], self._ws)
+        await self._ws.send_json(
+            p.ready(me, self._users.all(), self._hub.online()))
+        # Об остальных вкладках того же человека сообщать нечего:
+        # в сети он уже был.
+        if appeared:
+            await self._hub.broadcast(p.presence(me["id"], True), skip=self._ws)
 
         # Клиент присылает свой курсор по каждому известному ему документу.
         # Ответ — только то, чего у него нет.
@@ -91,8 +119,7 @@ class Session:
             if head - since > GAP_LIMIT:
                 await self._ws.send_json(p.reset(doc, head))
                 continue
-            for entry in self._db.entries_after(doc, since, GAP_LIMIT):
-                await self._ws.send_json(p.evt(entry))
+            await self._send_entries(self._db.entries_after(doc, since, GAP_LIMIT))
 
         await self._ws.send_json(p.synced(heads))
 
@@ -107,25 +134,62 @@ class Session:
             await self._ws.send_json(p.pong(int(time.time() * 1000)))
             return
 
+        # Вкладка в фоне присутствием не считается: человек может
+        # не возвращаться к ней сутками.
+        await self._set_active(frame.get("active") is not False)
+        self._touch()
+
         doc = frame.get("doc")
         if isinstance(doc, str) and doc and dialogs.can_read(doc, self._me["id"]):
             idx = _num(frame.get("idx"))
             head = self._db.last_idx(doc)
             if head > idx:
-                for entry in self._db.entries_after(doc, idx, GAP_LIMIT):
-                    await self._ws.send_json(p.evt(entry))
+                await self._send_entries(self._db.entries_after(doc, idx, GAP_LIMIT))
 
         # Общие действия сверяем по времени: клиент не знает их номеров,
         # но знает, чем он располагал на последнюю сверку.
         since = _num(frame.get("ts"))
         if since:
-            for entry in self._db.entries_after(
-                dialogs.DOC_USERS, _num(frame.get("users_idx")), GAP_LIMIT
-            ):
-                if entry["ts"] > since:
-                    await self._ws.send_json(p.evt(entry))
+            await self._send_entries([
+                entry
+                for entry in self._db.entries_after(
+                    dialogs.DOC_USERS, _num(frame.get("users_idx")), GAP_LIMIT
+                )
+                if entry["ts"] > since
+            ])
 
         await self._ws.send_json(p.pong(int(time.time() * 1000)))
+
+    async def _set_active(self, active: bool) -> None:
+        """Отмечает, смотрит ли человек в эту вкладку.
+
+        Присутствие считается по вкладкам на виду: свёрнутое окно —
+        это не «в сети».
+        """
+        if active == self._active:
+            return
+        self._active = active
+        changed = (self._hub.wake(self._me["id"], self._ws) if active
+                   else self._hub.idle(self._me["id"], self._ws))
+        if not changed:
+            return
+        now = int(time.time() * 1000)
+        if not active:
+            self._users.touch(self._me["id"], now)
+        await self._hub.broadcast(
+            p.presence(self._me["id"], active, 0 if active else now))
+
+    def _touch(self) -> None:
+        """Изредка отмечает, что человек ещё здесь.
+
+        На каждый ping писать незачем: это запись в базу раз в 30 секунд
+        на каждую вкладку, а поле смотрят только когда человек уже ушёл.
+        """
+        now = int(time.time() * 1000)
+        if now - self._seen_at < SEEN_INTERVAL:
+            return
+        self._seen_at = now
+        self._users.touch(self._me["id"], now)
 
     async def _on_tx(self, frame: dict) -> None:
         txid = frame.get("txid")
@@ -136,18 +200,39 @@ class Session:
             await self._ws.send_json(p.nack(txid, "нет доступа к документу"))
             return
 
+        op = frame.get("op", "")
+        payload = frame.get("payload") or {}
+        if op in ("msg.edit", "msg.delete"):
+            denied = self._deny_own(doc, payload)
+            if denied:
+                await self._ws.send_json(p.nack(txid, denied))
+                return
+
         entry = self._db.append(
             doc=doc,
             txid=txid,
-            op=frame.get("op", ""),
+            op=op,
             author=self._me["id"],
-            body=frame.get("payload") or {},
+            body=payload,
             ts=int(time.time() * 1000),
         )
 
         await self._ws.send_json(p.ack(txid, doc, entry["idx"]))
         # Тот же коммит уходит собеседнику и другим вкладкам автора.
         await self._hub.send_to(dialogs.members(doc), p.evt(entry), skip=self._ws)
+
+    def _deny_own(self, doc: str, payload: dict) -> str:
+        """Причина отказа править чужую запись; пустая строка — можно.
+
+        Править и удалять вправе только автор: доступ к документу есть
+        у обоих, и без этой проверки собеседник менял бы чужие сообщения.
+        """
+        target = self._db.entry_at(doc, _num(payload.get("target")))
+        if not target:
+            return "сообщение не найдено"
+        if target["author"] != self._me["id"]:
+            return "чужое сообщение"
+        return ""
 
     async def _on_fetch(self, frame: dict) -> None:
         """Добор окна истории вверх: последние записи до указанного номера."""
@@ -162,5 +247,4 @@ class Session:
             self._db.tail(doc, limit) if before <= 0
             else self._db.entries_before(doc, before, limit)
         )
-        for entry in entries:
-            await self._ws.send_json(p.evt(entry))
+        await self._send_entries(entries)

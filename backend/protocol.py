@@ -16,13 +16,24 @@ SYNCED = "synced"
 ACK = "ack"
 NACK = "nack"
 EVT = "evt"
+EVTS = "evts"
 RESET = "reset"
 PONG = "pong"
+PRESENCE = "presence"
 
 
-def ready(me: dict, users: list[dict]) -> dict:
-    """Сессия принята: кто я и кого видно."""
-    return {"t": READY, "me": me, "users": users}
+def ready(me: dict, users: list[dict], online: list[str]) -> dict:
+    """Сессия принята: кто я, кого видно и кто сейчас в сети."""
+    return {"t": READY, "me": me, "users": users, "online": online}
+
+
+def presence(user_id: str, online: bool, last_seen: int = 0) -> dict:
+    """Кто-то вошёл или вышел.
+
+    В журнал это не пишется: присутствие живёт секунды, а журнал —
+    навсегда. Клиент, который его не застал, получит снимок в READY.
+    """
+    return {"t": PRESENCE, "id": user_id, "online": online, "last_seen": last_seen}
 
 
 def synced(heads: dict[str, int]) -> dict:
@@ -40,7 +51,18 @@ def nack(txid: str, reason: str, fatal: bool = False) -> dict:
 
 
 def evt(entry: dict) -> dict:
+    """Одна запись журнала: живое сообщение, пришедшее прямо сейчас."""
     return {"t": EVT, **entry}
+
+
+def evts(entries: list[dict]) -> dict:
+    """Пачка записей одним кадром — досыл истории.
+
+    Досыл после долгого разрыва — это сотни записей. Поштучная отправка
+    заставляет клиента ждать, пока они промотаются по одной, поэтому
+    накопленное уходит одним кадром.
+    """
+    return {"t": EVTS, "entries": entries}
 
 
 def reset(doc: str, head: int) -> dict:

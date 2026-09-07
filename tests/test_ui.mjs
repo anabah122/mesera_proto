@@ -178,11 +178,19 @@ const tests = {
     assert.match(app, /storage\?\.close\(\)/, 'база не закрывается перед удалением');
   },
 
+  'удаление спрашивает подтверждение'() {
+    // Промах по соседней кнопке не должен стирать сообщение молча.
+    const app = readFileSync(new URL('../frontend/app.js', import.meta.url), 'utf8');
+    assert.match(app, /function removeMessage[\s\S]{0,120}confirm\(/,
+      'сообщение удаляется без подтверждения');
+  },
+
   'отрисовка ограничена, иначе длинный диалог кладёт телефон'() {
     const app = readFileSync(new URL('../frontend/app.js', import.meta.url), 'utf8');
     const limit = Number(app.match(/RENDER_LIMIT = (\d+)/)?.[1] ?? 0);
     assert.ok(limit > 0 && limit <= 300, `лимит отрисовки неразумен: ${limit}`);
-    assert.match(app, /store\.view\.slice\(-\(RENDER_LIMIT/, 'лента рисуется целиком');
+    // Лента режется лимитом; отметки о прочтении в неё не попадают вовсе.
+    assert.match(app, /messages\.slice\(-\(RENDER_LIMIT/, 'лента рисуется целиком');
     assert.match(app, /shownExtra = 0/, 'счётчик не сбрасывается при смене диалога');
   },
 

@@ -225,20 +225,56 @@ button.ghost:hover { color: var(--ink); }
 .people { overflow-y: auto; padding: 6px; display: flex; flex-direction: column; gap: 2px; }
 
 .person {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
+  /* Имя и логин колонкой слева, счётчик непрочитанного — справа. */
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 2px 8px;
   padding: 9px 11px;
   border-radius: 8px;
   background: transparent;
   color: inherit;
   text-align: left;
 }
+.person .who, .person .hint { grid-column: 1; }
+.person .unread {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  min-width: 20px;
+  padding: 2px 6px;
+  border-radius: 10px;
+  background: #e5342b;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.3;
+  text-align: center;
+}
 .person:hover  { background: var(--sunken); }
 .person.active { background: var(--accent); }
 .person .who  { font-weight: 500; }
 .person .hint { font-size: 12px; color: var(--ink-mute); }
+.person .hint.online { color: #3ba3f0; }
 .person.active .hint { color: #c9dcee; }
+
+/* «В сети»: точка у имени в списке, подпись в шапке диалога. */
+.dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-left: 6px;
+  border-radius: 50%;
+  background: #3ba3f0;
+  vertical-align: middle;
+}
+
+.peer-state {
+  margin-left: auto;
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--ink-mute);
+}
+.peer-state.online { color: #3ba3f0; }
 
 /* --- переписка --- */
 
@@ -294,6 +330,8 @@ button.ghost:hover { color: var(--ink); }
   text-align: right;
 }
 .msg.own .meta { color: #b9d0e6; }
+/* Прочитано собеседником. Стоит в подписи рядом со временем. */
+.msg .tick { margin-left: 5px; letter-spacing: -2px; }
 
 /* Картинка в ленте. Высота ограничена, чтобы вертикальный снимок
    не занимал весь экран; полный размер открывается по клику. */
@@ -386,26 +424,43 @@ button.ghost:hover { color: var(--ink); }
   from { background: var(--accent-2) }
 }
 
-/* Кнопка ответа: проявляется при наведении на сообщение. */
+/* Действия над сообщением: проявляются при наведении на пузырь. */
 .msg { position: relative; }
 
-.reply-btn {
+.actions {
   position: absolute;
   top: 2px;
-  right: -30px;
+  /* Прижато к краю пузыря: ширина панели зависит от числа кнопок,
+     поэтому отступ считаем от границы, а не фиксированным числом. */
+  left: 100%;
+  margin-left: 8px;
+  display: flex;
+  gap: 6px;
+  opacity: 0;
+  transition: opacity .1s;
+  white-space: nowrap;
+}
+/* У своих сообщений панель зеркалится: пузырь прижат к правому краю,
+   и справа от него места нет. */
+.msg.own .actions {
+  left: auto;
+  right: 100%;
+  margin-left: 0;
+  margin-right: 8px;
+}
+.msg:hover .actions { opacity: 1; }
+
+.action {
   border: 0;
   background: transparent;
   padding: 0;
   color: var(--ink-mute);
   font-size: 13px;
+  line-height: 1;
   filter: grayscale(1);
   cursor: pointer;
-  opacity: 0;
-  transition: opacity .1s;
 }
-.msg.own .reply-btn { right: auto; left: -30px; }
-.msg:hover .reply-btn { opacity: 1; }
-.reply-btn:hover { filter: none; }
+.action:hover { filter: none; }
 
 /* Панель над полем ввода: на что отвечаем. */
 .reply-bar {
@@ -562,10 +617,15 @@ emoji-picker {
   .emoji-pad { left: 8px; right: 8px; }
   emoji-picker { width: 100%; height: 320px; }
 
-  /* Кнопка ответа висела за пределами пузыря — на узком экране это выход
-     за край. Прячем внутрь. */
-  .reply-btn { right: 4px; opacity: .5; }
-  .msg.own .reply-btn { right: 4px; left: auto; }
+  /* За пределами пузыря панели не хватает места — на узком экране
+     кладём её внутрь, к верхнему правому углу. */
+  .actions,
+  .msg.own .actions {
+    left: auto;
+    right: 6px;
+    margin: 0;
+    opacity: .5;
+  }
 
   .viewer { padding: 12px; }
 

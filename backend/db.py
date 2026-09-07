@@ -22,7 +22,8 @@ CREATE TABLE IF NOT EXISTS users (
     avatar   TEXT,
     pwd_salt BLOB NOT NULL,
     pwd_hash BLOB NOT NULL,
-    created  INTEGER NOT NULL
+    created  INTEGER NOT NULL,
+    last_seen INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS sessions (
@@ -67,7 +68,19 @@ class Database:
         self._conn.execute("PRAGMA journal_mode=WAL")
         self._conn.execute("PRAGMA foreign_keys=ON")
         self._conn.executescript(SCHEMA)
+        self._migrate()
         self._conn.commit()
+
+    def _migrate(self) -> None:
+        """Дотягивает схему в базах, созданных прежними версиями.
+
+        CREATE TABLE IF NOT EXISTS новых колонок не добавляет, поэтому
+        существующая база осталась бы без last_seen.
+        """
+        known = {r["name"] for r in self._conn.execute("PRAGMA table_info(users)")}
+        if "last_seen" not in known:
+            self._conn.execute(
+                "ALTER TABLE users ADD COLUMN last_seen INTEGER NOT NULL DEFAULT 0")
 
     def close(self) -> None:
         with self._lock:
@@ -115,6 +128,13 @@ class Database:
         row = self._conn.execute(
             "SELECT * FROM entries WHERE doc = ? AND txid = ?", (doc, txid)
         ).fetchone()
+        return _entry(row) if row else None
+
+    def entry_at(self, doc: str, idx: int) -> dict | None:
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT * FROM entries WHERE doc = ? AND idx = ?", (doc, idx)
+            ).fetchone()
         return _entry(row) if row else None
 
     def last_idx(self, doc: str) -> int:

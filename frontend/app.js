@@ -2,14 +2,17 @@
 // Авторизации здесь нет — без токена сразу уходим на страницу входа.
 
 // Первым: перехват сбоев палитры должен встать до её импорта.
-import './guard.js?v=17';
-import { Connection } from './connection.js?v=17';
-import './vendor/picker.js?v=17';
-import { prepare, upload } from './image.js?v=17';
-import { dialogId } from './protocol.js?v=17';
-import { Session } from './session.js?v=17';
-import { Storage } from './storage.js?v=17';
-import { DOC_USERS, Store, WINDOW } from './store.js?v=17';
+import './guard.js?v=25';
+import { Connection } from './connection.js?v=25';
+import './vendor/picker.js?v=25';
+import { prepare, upload } from './image.js?v=25';
+import { dialogId } from './protocol.js?v=25';
+import { Session } from './session.js?v=25';
+import { Storage } from './storage.js?v=25';
+import { DOC_USERS, isMessage, Store, WINDOW } from './store.js?v=25';
+import { Badge } from './badge.js?v=25';
+import { Sound } from './sound.js?v=25';
+import { Presence, presenceLabel } from './presence.js?v=25';
 
 // Сколько сообщений держим в DOM. Окно в памяти больше, но рисовать его
 // целиком нельзя: на телефоне тысячи узлов кладут вкладку.
@@ -29,6 +32,13 @@ const replyBar = $('replyBar'), emojiPad = $('emojiPad');
 
 // На какое сообщение отвечаем. Сбрасывается после отправки и при смене диалога.
 let replyTo = null;
+
+// Какое сообщение правим. Отправка уходит правкой, а не новым сообщением.
+let editing = null;
+
+const badge = new Badge();
+const sound = new Sound();
+const presence = new Presence(() => onPresenceChange());
 
 let storage, store, conn;
 let me = null;
@@ -90,9 +100,14 @@ async function start(session) {
 
   // Перерисовка идёт через onStoreChange: он обновляет и список людей,
   // и ленту — одного render мало, сайдбар остался бы прежним.
-  store = new Store(storage, onStoreChange);
+  store = new Store(storage, onStoreChange, onIncoming);
+  store.me = session.me.id;
   // Состав, известный с прошлого сеанса: список людей есть до соединения.
   await store.loadUsers();
+  // Курсоры прочитанного с прошлого сеанса: бейдж честен сразу после
+  // перезагрузки, не дожидаясь досыла.
+  await store.loadRead(knownDocs());
+  refreshBadge();
 
   conn = new Connection({
     token: session.token,
@@ -100,7 +115,13 @@ async function start(session) {
     // Курсоры отправляются по всем диалогам, известным локально.
     docs: () => knownDocs(),
     onReady: onReady,
-    onStatus: (s) => { statusEl.textContent = s; statusEl.className = 'status ' + s; },
+    onStatus: (s) => {
+      statusEl.textContent = s;
+      statusEl.className = 'status ' + s;
+      // Оборвалась связь — про чужое присутствие мы больше ничего не знаем.
+      if (s === 'offline') presence.clear();
+    },
+    onPresence: (id, online, lastSeen) => presence.set(id, online, lastSeen),
     // Токен протух — возвращаем на вход вместо бесконечных переподключений.
     onFatal: (reason) => toGate(reason),
   });
@@ -126,15 +147,36 @@ function knownDocs() {
   return docs;
 }
 
-async function onReady(user, users) {
+async function onReady(user, users, online) {
   me = user;
+  // Снимок присутствия на момент подключения: дальше его правят кадры.
+  presence.reset(online);
   $('myName').textContent = me.name;
   conn.setAuthor(me.id);
   // ready — стартовый снимок. Дальше состав живёт транзакциями журнала,
   // поэтому снимок кладём в тот же контейнер, что и они.
-  for (const u of users) if (!store.users.has(u.id)) store.users.set(u.id, u);
+  for (const u of users) {
+    if (!store.users.has(u.id)) store.users.set(u.id, u);
+    // Только запоминаем время визита: кто в сети — сказал снимок в READY,
+    // и трогать присутствие здесь нельзя.
+    presence.seen(u.id, u.last_seen);
+  }
   refreshPeople();
   if (peerId) await openDialog(peerId);
+}
+
+// Шапка диалога: имя собеседника и его присутствие. Рисуется отдельно —
+// присутствие меняется, пока диалог открыт.
+function renderHead() {
+  if (!peerId) return;
+  const name = people.find((u) => u.id === peerId)?.name || peerId;
+  const online = presence.isOnline(peerId);
+
+  const state = document.createElement('span');
+  state.className = 'peer-state' + (online ? ' online' : '');
+  state.textContent = presenceLabel(online, presence.lastSeen(peerId));
+
+  chatHead.replaceChildren(backButton(), document.createTextNode(name), state);
 }
 
 // Единственный источник списка людей — журнал состава.
@@ -148,12 +190,12 @@ function refreshPeople() {
 async function openDialog(id) {
   peerId = id;
   clearReply();
+  clearEdit();
   shownExtra = 0;
   // На узком экране показывается что-то одно: список или переписка.
   app.classList.add('at-dialog');
   const doc = dialogId(me.id, peerId);
-  chatHead.replaceChildren(backButton(),
-    document.createTextNode(people.find((u) => u.id === peerId)?.name || peerId));
+  renderHead();
   composer.hidden = false;
   renderPeople();
 
@@ -161,6 +203,8 @@ async function openDialog(id) {
   conn.setOpenDoc(doc);
   // Стартовое окно: если локально пусто, забираем хвост с сервера.
   if (!store.view.length) conn.fetchOlder(doc, 0, WINDOW);
+  // Диалог открыли — накопившееся в нём прочитано.
+  markReadHere();
   input.focus();
 }
 
@@ -168,6 +212,7 @@ async function openDialog(id) {
 logEl.onscroll = async () => {
   if (logEl.scrollTop > 40 || loadingOlder || !store?.doc) return;
   loadingOlder = true;
+  markReadHere();
   const got = await store.older();
   if (!got && store.oldestIdx() > 1) {
     conn.fetchOlder(store.doc, store.oldestIdx(), WINDOW);
@@ -179,6 +224,13 @@ composer.onsubmit = (e) => {
   e.preventDefault();
   const text = input.value.trim();
   if (!text || !peerId) return;
+
+  if (editing) {
+    conn.send(editing.doc, 'msg.edit', { target: editing.idx, text });
+    clearEdit();
+    return;
+  }
+
   conn.send(dialogId(me.id, peerId), 'msg.send', withReply({ text }));
   input.value = '';
   clearReply();
@@ -202,7 +254,7 @@ function withReply(payload) {
 
 function quote(entry) {
   if (entry.op === 'msg.image') return 'Картинка';
-  return (entry.payload.text || '').slice(0, 120);
+  return store.textOf(entry).slice(0, 120);
 }
 
 function startReply(entry) {
@@ -218,7 +270,7 @@ function clearReply() {
   replyBar.hidden = true;
 }
 
-$('replyCancel').onclick = clearReply;
+$('replyCancel').onclick = () => (editing ? clearEdit() : clearReply());
 
 function nameOf(id) {
   if (id === me?.id) return 'Вы';
@@ -245,6 +297,7 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
     if (!viewer.hidden) closeViewer();
     else if (!emojiPad.hidden) emojiPad.hidden = true;
+    else if (editing) clearEdit();
     else if (replyTo) clearReply();
   }
 });
@@ -257,7 +310,7 @@ const picker = document.createElement('emoji-picker');
 // Полный адрес от текущей страницы, а не путь от корня: браузер считает
 // запрос по абсолютному пути обращением в другое адресное пространство
 // и режет его политикой Private Network Access.
-picker.dataSource = new URL('vendor/emoji-data.json?v=17', location.href).href;
+picker.dataSource = new URL('vendor/emoji-data.json?v=25', location.href).href;
 picker.locale = 'ru';
 picker.addEventListener('emoji-click', (e) => insert(e.detail.unicode));
 emojiPad.append(picker);
@@ -338,6 +391,52 @@ function backButton() {
   return el;
 }
 
+// --- оповещения --------------------------------------------------------
+
+// Живое чужое сообщение: звук и бейдж. Досыл истории сюда не попадает —
+// иначе после разрыва пришла бы очередь сигналов.
+function onIncoming(entry) {
+  // Открытый диалог на видимой вкладке человек читает прямо сейчас:
+  // отмечаем прочитанным, сигнал не нужен.
+  if (entry.doc === store.doc && !document.hidden) {
+    markReadHere();
+    return;
+  }
+  sound.play();
+}
+
+/** Отмечает открытый диалог прочитанным — если человек его действительно видит. */
+function markReadHere() {
+  if (!store?.doc || document.hidden) return;
+  conn?.markRead(store.doc, store.unreadUpto(store.doc));
+  refreshBadge();
+}
+
+// Время визита само не стареет, но за полночь «был в 23:50» должно
+// превратиться в «был 6 сент. в 23:50».
+setInterval(() => { if (me) onPresenceChange(); }, 10 * 60000);
+
+// Присутствие меняет и список людей, и шапку диалога.
+function onPresenceChange() {
+  if (!me) return;
+  renderPeople();
+  renderHead();
+}
+
+function refreshBadge() {
+  badge.set(store?.unreadTotal() || 0);
+}
+
+// Возврат на вкладку — то же самое, что и прочтение: человек увидел
+// накопившееся, значит курсор надо двинуть.
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden) markReadHere();
+});
+
+// Клик и прокрутка в открытом диалоге тоже подтверждают прочтение:
+// вкладка могла быть видимой всё время, и visibilitychange не сработает.
+window.addEventListener('focus', markReadHere);
+
 // --- отрисовка ---------------------------------------------------------
 
 function renderPeople() {
@@ -349,11 +448,37 @@ function renderPeople() {
         el.className = 'person' + (u.id === peerId ? ' active' : '');
         el.innerHTML = '<span class="who"></span><span class="hint"></span>';
         el.children[0].textContent = u.name;
-        el.children[1].textContent = '@' + u.login;
+        // Под именем — присутствие: логин человек и так знает, а вот когда
+        // собеседник был в сети, видно только здесь.
+        const online = presence.isOnline(u.id);
+        el.children[1].textContent = presenceLabel(online, presence.lastSeen(u.id));
+        if (online) {
+          el.children[0].append(dot());
+          el.children[1].classList.add('online');
+        }
+
+        // Непрочитанное по этому собеседнику — та же цифра, что и на вкладке,
+        // но только по его диалогу.
+        const unread = store.unreadIn(dialogId(me.id, u.id));
+        if (unread) {
+          const mark = document.createElement('span');
+          mark.className = 'unread';
+          mark.textContent = unread > 99 ? '99+' : String(unread);
+          el.append(mark);
+        }
+
         el.onclick = () => openDialog(u.id);
         return el;
       })
   );
+}
+
+// Метка «в сети»: синяя точка рядом с именем.
+function dot() {
+  const el = document.createElement('span');
+  el.className = 'dot';
+  el.title = 'в сети';
+  return el;
 }
 
 // Время отправки берётся из самой транзакции: ts проставляет сервер
@@ -387,27 +512,81 @@ function bubble(entry, meta, cls) {
     img.onclick = () => openViewer(img.src);
     el.append(img);
   } else {
-    el.append(document.createTextNode(entry.payload.text ?? ''));
+    // Текст берём с учётом правок: оригинал остаётся в журнале,
+    // а на экране стоит последняя версия.
+    el.append(document.createTextNode(
+      entry.idx ? store.textOf(entry) : entry.payload.text ?? ''));
   }
 
   // Подпись снизу: время у отправленного, состояние у неподтверждённого.
   const foot = document.createElement('div');
   foot.className = 'meta';
-  foot.textContent = meta;
+  foot.textContent = entry.idx && store.isEdited(entry) ? meta + ' изменено' : meta;
+  // Галочка на своём сообщении: собеседник дочитал до этого номера.
+  if (cls.includes('own') && entry.idx && entry.idx <= store.peerReadIdx(store.doc)) {
+    const tick = document.createElement('span');
+    tick.className = 'tick';
+    tick.title = 'Прочитано';
+    tick.textContent = '✓✓';
+    foot.append(tick);
+  }
   el.append(foot);
 
-  // Ответить можно только на записанное: у неподтверждённого нет номера.
+  // Действия доступны только записанному: у неподтверждённого нет номера.
   if (entry.idx) {
     el.dataset.idx = entry.idx;
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'reply-btn';
-    btn.title = 'Ответить';
-    btn.textContent = '💬';
-    btn.onclick = () => startReply(entry);
-    el.append(btn);
+    el.append(actions(entry));
   }
   return el;
+}
+
+// Действия над сообщением: панель проявляется при наведении на пузырь.
+// Удалять можно только своё — сервер это тоже проверяет.
+function actions(entry) {
+  const bar = document.createElement('div');
+  bar.className = 'actions';
+  bar.append(action('💬', 'Ответить', () => startReply(entry)));
+  // Править и удалять можно только своё — сервер это тоже проверяет.
+  if (entry.author === me.id) {
+    if (entry.op === 'msg.send') {
+      bar.append(action('✏️', 'Изменить', () => startEdit(entry)));
+    }
+    bar.append(action('🗑', 'Удалить', () => removeMessage(entry)));
+  }
+  return bar;
+}
+
+function action(icon, title, onClick) {
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'action';
+  btn.title = title;
+  btn.textContent = icon;
+  btn.onclick = onClick;
+  return btn;
+}
+
+function removeMessage(entry) {
+  if (!confirm('Удалить сообщение?')) return;
+  conn.send(entry.doc, 'msg.delete', { target: entry.idx });
+}
+
+// --- правка ------------------------------------------------------------
+
+function startEdit(entry) {
+  clearReply();
+  editing = entry;
+  input.value = store.textOf(entry);
+  replyBar.querySelector('.reply-who').textContent = 'Изменение';
+  replyBar.querySelector('.reply-text').textContent = store.textOf(entry);
+  replyBar.hidden = false;
+  input.focus();
+}
+
+function clearEdit() {
+  editing = null;
+  input.value = '';
+  replyBar.hidden = true;
 }
 
 // Отметка о скрытой части истории. Клик показывает ещё одно окно.
@@ -437,6 +616,9 @@ function scrollTo(idx) {
 function onStoreChange() {
   if (me) refreshPeople();
   render();
+  // Досыл мог принести и чужие сообщения, и чужие отметки о прочтении —
+  // бейдж пересчитываем после любой перерисовки.
+  refreshBadge();
 }
 
 function render() {
@@ -446,8 +628,12 @@ function render() {
 
   // Рисуем только хвост окна. Остальное лежит в памяти и в базе — его
   // видно после прокрутки вверх, но в разметку оно не попадает.
-  const shown = store.view.slice(-(RENDER_LIMIT + shownExtra));
-  const hidden = store.view.length - shown.length;
+  // Отметки о прочтении живут в том же журнале, но человек их не видит:
+  // в ленту идут только сообщения.
+  const messages = store.view.filter(
+    (e) => isMessage(e) && !store.isDeleted(store.doc, e.idx));
+  const shown = messages.slice(-(RENDER_LIMIT + shownExtra));
+  const hidden = messages.length - shown.length;
 
   logEl.replaceChildren(
     // Сколько записей осталось выше — иначе прокрутка молча упирается.

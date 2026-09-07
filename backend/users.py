@@ -122,6 +122,18 @@ class Users:
         ).fetchone()
         return _public(row) if row else None
 
+    def touch(self, user_id: str, ts: int) -> None:
+        """Отмечает, когда человека видели последний раз.
+
+        Пишется на разрыв соединения и изредка по ходу сессии: пока сокет
+        жив, человек и так онлайн, и это поле никто не смотрит.
+        """
+        with self._conn:
+            self._conn.execute(
+                "UPDATE users SET last_seen = ? WHERE id = ? AND last_seen < ?",
+                (ts, user_id, ts),
+            )
+
     def by_id(self, user_id: str) -> dict | None:
         row = self._conn.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
         return _public(row) if row else None
@@ -140,4 +152,5 @@ def _public(row: sqlite3.Row) -> dict:
         "name": row["name"],
         "avatar": row["avatar"],
         "created": row["created"],
+        "last_seen": row["last_seen"],
     }

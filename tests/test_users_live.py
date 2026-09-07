@@ -35,6 +35,17 @@ def _creds(tag):
     return {"login": f"{tag}_{secrets.token_hex(3)}", "password": "secret123", "name": tag, "invite": users_mod.INVITE}
 
 
+def _unpack(frame):
+    """Пачка evts — в отдельные записи; остальные кадры как есть.
+
+    Досыл едет одним кадром, а сценарии смотрят на отдельные записи —
+    разворачиваем так же, как это делает настоящий клиент.
+    """
+    if frame["t"] != "evts":
+        return [frame]
+    return [{"t": "evt", **entry} for entry in frame["entries"]]
+
+
 def test_new_user_reaches_open_tab():
     with TestClient(app) as c:
         alice = c.post("/api/register", json=_creds("alice")).json()
@@ -48,7 +59,7 @@ def test_new_user_reaches_open_tab():
                 f = ws.receive_json()
                 if f["t"] == "synced":
                     break
-                frames.append(f)
+                frames += _unpack(f)
             # Себя Алиса уже видит из журнала состава.
             assert any(f.get("op") == "user.add" for f in frames)
 
@@ -80,8 +91,8 @@ def test_late_tab_backfills_by_cursor():
                 f = ws.receive_json()
                 if f["t"] == "synced":
                     break
-                if f.get("doc") == dialogs.DOC_USERS:
-                    seen.append(f["payload"]["id"])
+                seen += [e["payload"]["id"] for e in _unpack(f)
+                         if e.get("doc") == dialogs.DOC_USERS]
             assert dave["me"]["id"] in seen, "новый пользователь не доехал досылом"
 
 
@@ -121,7 +132,7 @@ def test_heartbeat_delivers_missed_users():
                 if f["t"] == "pong":
                     assert f["ts"] > 0, "pong без серверного времени"
                     break
-                got.append(f["payload"]["id"])
+                got += [e["payload"]["id"] for e in _unpack(f)]
             assert grace["me"]["id"] in got
 
 

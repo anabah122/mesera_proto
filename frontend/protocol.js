@@ -9,8 +9,10 @@ export const T = {
   ACK: 'ack',
   NACK: 'nack',
   EVT: 'evt',
+  EVTS: 'evts',
   RESET: 'reset',
   PONG: 'pong',
+  PRESENCE: 'presence',
 };
 
 export function txid() {
