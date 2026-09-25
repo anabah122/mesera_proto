@@ -300,6 +300,7 @@ button.ghost:hover { color: var(--ink); }
   display: flex;
   flex-direction: column;
   gap: 6px;
+  background: url("assets/chat-bg.jpg") center / cover no-repeat;
 }
 
 .loader {

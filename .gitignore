@@ -9,3 +9,7 @@ files/
 
 # Служебный каталог агента: в репозиторий не идёт.
 .claude/
+
+mesera.db
+mesera.db.tmp
+*.db.local-backup
