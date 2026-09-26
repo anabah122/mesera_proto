@@ -300,10 +300,6 @@ button.ghost:hover { color: var(--ink); }
   display: flex;
   flex-direction: column;
   gap: 6px;
-  background-image: linear-gradient(rgba(23, 33, 43, .8), rgba(23, 33, 43, .8)), url("assets/chat-bg.webp");
-  background-size: cover;
-  background-position: center;
-  background-repeat: no-repeat;
 }
 
 .loader {
